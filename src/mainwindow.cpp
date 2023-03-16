@@ -203,6 +203,7 @@ void MainWindow::onButtonNewCalculationClick()
 		consumeTable->blockSignals(false);
 
 		//consumeTable->update();
+		writeTableWidgetToCSVfile(consumationCSVPath, consumeTable);
 
 		std::cout << "Ready for new calculation" << std::endl;
 	}
