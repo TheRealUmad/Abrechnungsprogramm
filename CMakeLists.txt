@@ -26,6 +26,7 @@ find_package(Qt6Gui REQUIRED)
 find_package(Qt6OpenGL REQUIRED)
 find_package(Qt6Xml REQUIRED)
 find_package(Qt6Widgets REQUIRED)
+find_package(Qt6PrintSupport REQUIRED)
 
 set(FORMS_DIR "${CMAKE_SOURCE_DIR}/forms")
 set(INCLUDE_DIR "${CMAKE_SOURCE_DIR}/include")
@@ -52,6 +53,7 @@ target_include_directories(Abrechnungsprogramm PRIVATE ${SOURCE_DIR})
 target_link_libraries(Abrechnungsprogramm Qt6::OpenGL)
 target_link_libraries(Abrechnungsprogramm Qt6::Xml)
 target_link_libraries(Abrechnungsprogramm Qt6::Widgets)
+target_link_libraries(Abrechnungsprogramm Qt6::PrintSupport)
 target_link_libraries(Abrechnungsprogramm ${QT_LIBRARIES} ${OPENGL_LIBRARIES})
 
 

@@ -7,6 +7,9 @@
 #include <AddItemDialog.h>
 #include <AddMemberDialog.h>
 #include <qmessagebox.h>
+#include <qpdfwriter.h>
+#include <qtexttable.h>
+#include <qprinter.h>
 
 MainWindow::MainWindow(QWidget* parent) :
 	QMainWindow(parent),
@@ -29,6 +32,13 @@ MainWindow::MainWindow(QWidget* parent) :
 	itemCSVPath = exePath + "/Artikel.csv";
 	saveFileDir = exePath + "/Sicherungskopien";
 	saveFilePath = saveFileDir + "/Artikel_SicherungsKopie.csv";
+
+	pdfFileDir = exePath + "/PDFs";
+	if (!createDir(pdfFileDir))
+	{
+		std::cerr << "Error! Cannot create dir" << std::endl;
+	}
+	pdfFilePath = pdfFileDir + "/Abrechnung.pdf";
 
 	if (!createDir(saveFileDir))
 	{
@@ -53,6 +63,7 @@ MainWindow::MainWindow(QWidget* parent) :
 	QObject::connect(ui->btn_addItem, &QPushButton::clicked, this, &MainWindow::onButtonAddItemClick);
 	QObject::connect(ui->btn_addMember, &QPushButton::clicked, this, &MainWindow::onButtonAddMemberClick);
 	QObject::connect(ui->btn_newCalculation, &QPushButton::clicked, this, &MainWindow::onButtonNewCalculationClick);
+	QObject::connect(ui->btn_saveAsPdf, &QPushButton::clicked, this, &MainWindow::onButtonPrintToPdfClick);
 	QObject::connect(ui->tableWidget_items, &QTableWidget::itemChanged, this, &MainWindow::onItemTableWidgetItemsChanged);
 	QObject::connect(ui->tableWidget_member, &QTableWidget::itemChanged, this, &MainWindow::onItemTableWidgetMemberChanged);
 	QObject::connect(ui->tableWidget_consume, &QTableWidget::itemChanged, this, &MainWindow::onItemTableWidgetConsumeChanged);
@@ -129,6 +140,140 @@ MainWindow::~MainWindow()
 	}
 }
 
+void MainWindow::onButtonPrintToPdfClick()
+{
+	std::cout << "Button print to PDF clicked" << std::endl;
+
+	QTableWidget* consumeTable = ui->tableWidget_consume;
+
+	int columnCount = 0;
+
+	QString headerTextAlias = "Coleurname";
+	QString headerTextCarryover = "Uebertrag";
+	QString headerTextDeposits = "Einzahlungen";
+	QString headerTextTurnover = "Umsatz";
+	QString headerTextDebt = "Schulden";
+	QString headerTextCredit = "Guthaben";
+
+	QList<QString> headerTexts;
+	headerTexts.push_back(headerTextAlias);
+	headerTexts.push_back(headerTextCarryover);
+	headerTexts.push_back(headerTextDeposits);
+	headerTexts.push_back(headerTextTurnover);
+	headerTexts.push_back(headerTextDebt);
+	headerTexts.push_back(headerTextCredit);
+
+	std::map<int, int> columnTranslatorMap;
+
+	int columnAlias = findColumnInTableHeader(consumeTable, headerTextAlias);
+	columnTranslatorMap.insert(std::pair<int, int>(columnCount, columnAlias));
+	columnCount++;
+	int columnCarryover = findColumnInTableHeader(consumeTable, headerTextCarryover);
+	columnTranslatorMap.insert(std::pair<int, int>(columnCount, columnCarryover));
+	columnCount++;
+	int columnDeposits = findColumnInTableHeader(consumeTable, headerTextDeposits);
+	columnTranslatorMap.insert(std::pair<int, int>(columnCount, columnDeposits));
+	columnCount++;
+	int columnTurnover = findColumnInTableHeader(consumeTable, headerTextTurnover);
+	columnTranslatorMap.insert(std::pair<int, int>(columnCount, columnTurnover));
+	columnCount++;
+	int columnDebt = findColumnInTableHeader(consumeTable, headerTextDebt);
+	columnTranslatorMap.insert(std::pair<int, int>(columnCount, columnDebt));
+	columnCount++;
+	int columnCredit = findColumnInTableHeader(consumeTable, headerTextCredit);
+	columnTranslatorMap.insert(std::pair<int, int>(columnCount, columnCredit));
+	columnCount++;
+
+	if (columnAlias == -1 || columnCarryover == -1 || columnDeposits == -1 || columnTurnover == -1 || columnDebt == -1 || columnCredit == -1)
+	{
+		std::cout << "Error! Could not find column indexes" << std::endl;
+		return;
+	}
+
+	//relevant columns for pdf: alias, carryover, deposits, turnover, debt, credit = 6
+
+	QTextDocument* doc = new QTextDocument;
+	//doc->setDocumentMargin(10);
+	//doc->setPageSize(QPageSize::A4);
+	QTextCursor cursor(doc);
+
+	QTextCharFormat boldFormat;
+	boldFormat.setFontWeight(QFont::Bold);
+
+	QTextCharFormat textFormat;
+	textFormat.setBackground(Qt::white);
+
+	QTextCharFormat redFormat;
+	redFormat.setBackground(Qt::red);
+
+	QTextCharFormat alternateCellFormat;
+	alternateCellFormat.setBackground(Qt::lightGray);
+
+	QTextTableFormat tableFormat;
+	tableFormat.setAlignment(Qt::AlignCenter);
+	tableFormat.setBorderCollapse(true);
+	QTextLength tableWidth = QTextLength(QTextLength::PercentageLength, 80);
+	tableFormat.setWidth(tableWidth);
+	tableFormat.setBorderStyle(QTextFrameFormat::BorderStyle_Solid);
+
+	cursor.movePosition(QTextCursor::Start);
+
+	QTextTable* table = cursor.insertTable(consumeTable->rowCount() + 1, columnCount, tableFormat); //+1 because table header
+
+	std::cout << "Generating document table header" << std::endl;
+	for (int column = 0; column < columnCount; column++)
+	{
+		QTextTableCell headerCell = table->cellAt(0, column);
+		QTextCursor headerCellCursor = headerCell.firstCursorPosition();
+		headerCellCursor.insertText(headerTexts.at(column), boldFormat);
+	}
+
+	std::cout << "Generating document table items" << std::endl;
+	for (int row = 0; row < consumeTable->rowCount(); row++)
+	{
+		QTextCharFormat cellFormat = row % 2 == 0 ? textFormat : alternateCellFormat;
+		for (int column = 0; column < columnCount; column++)
+		{
+
+			QTableWidgetItem* consumeTableItem = consumeTable->item(row, columnTranslatorMap.at(column));
+
+			if (consumeTableItem != nullptr && !consumeTableItem->text().isEmpty())
+			{
+				QTextTableCell cell = table->cellAt(row + 1, column);
+				QTextCursor cellCursor = cell.firstCursorPosition();
+
+				if (consumeTableItem->column() == columnDebt)
+				{
+					cell.setFormat(redFormat);
+				}
+				else
+				{
+					cell.setFormat(cellFormat);
+				}
+
+				std::string cellText = consumeTableItem->text().toStdString();
+				checkDoubleDigitString(cellText);
+
+				std::cout << "Inserting text " << cellText << " from consume table into document" << std::endl;
+				cellCursor.insertText(QString::fromStdString(cellText));
+			}
+		}
+	}
+
+	cursor.movePosition(QTextCursor::End);
+	cursor.insertBlock();
+
+	std::cout << "Trying to print document to pdf" << std::endl;
+
+	QPrinter printer(QPrinter::HighResolution);
+	printer.setPageOrientation(QPageLayout::Portrait);
+	printer.setPageSize(QPageSize::A4);
+	printer.setFullPage(true);
+	printer.setOutputFileName(QString::fromStdString(pdfFilePath));
+	doc->print(&printer);
+
+}
+
 void MainWindow::onButtonNewCalculationClick()
 {
 	std::cout << "Button new calculation clicked" << std::endl;
@@ -146,32 +291,17 @@ void MainWindow::onButtonNewCalculationClick()
 
 		std::cout << "Trying to get relevant column indexes" << std::endl;
 
-		int columnCarryover = findColumnInTableHeader(consumeTable, "Uebertrag");
-		int columnDeposits = findColumnInTableHeader(consumeTable, "Einzahlungen");
-		int columnTurnover = findColumnInTableHeader(consumeTable, "Umsatz");
-		int columnDebt = findColumnInTableHeader(consumeTable, "Schulden");
-		int columnCredit = findColumnInTableHeader(consumeTable, "Guthaben");
+		int columnCarryover;
+		int columnDeposits;
+		int columnTurnover;
+		int columnDebt;
+		int columnCredit;
+		int columnItemsStart;
+		int columnItemsEnd;
 
-		int columnItemsStart = -1;
-		int columnItemsEnd = -1;
-
-		QTableWidgetItem* firstItem = itemsTable->item(0, 0);
-
-		if (firstItem != nullptr && !firstItem->text().isEmpty())
+		if (!findRelevantColumnIndexes(consumeTable, itemsTable, columnCarryover, columnDeposits, columnTurnover, columnDebt, columnCredit, columnItemsStart, columnItemsEnd))
 		{
-			columnItemsStart = findColumnInTableHeader(consumeTable, firstItem->text());
-		}
-
-		QTableWidgetItem* lastItem = itemsTable->item(itemsTable->rowCount()-1, 0);
-
-		if (lastItem != nullptr && !lastItem->text().isEmpty())
-		{
-			columnItemsEnd = findColumnInTableHeader(consumeTable, lastItem->text());
-		}
-
-		if (columnCarryover == -1 || columnDeposits == -1 || columnTurnover == -1 || columnDebt == -1 || columnCredit == -1 || columnItemsStart == -1 || columnItemsEnd == -1)
-		{
-			std::cout << "Could not find the needed table headers in consume table" << std::endl;
+			std::cout << "Error! Could not find column indexes" << std::endl;
 			return;
 		}
 
@@ -207,6 +337,42 @@ void MainWindow::onButtonNewCalculationClick()
 
 		std::cout << "Ready for new calculation" << std::endl;
 	}
+}
+
+bool MainWindow::findRelevantColumnIndexes(QTableWidget* consumeTable, QTableWidget* itemTable, int& columnCarryover, int& columnDeposits, int& columnTurnover, int& columnDebt, int& columnCredit, int& columnItemsStart, int& columnItemsEnd)
+{
+	std::cout << "Trying to get relevant column indexes" << std::endl;
+
+	columnCarryover = findColumnInTableHeader(consumeTable, "Uebertrag");
+	columnDeposits = findColumnInTableHeader(consumeTable, "Einzahlungen");
+	columnTurnover = findColumnInTableHeader(consumeTable, "Umsatz");
+	columnDebt = findColumnInTableHeader(consumeTable, "Schulden");
+	columnCredit = findColumnInTableHeader(consumeTable, "Guthaben");
+
+	columnItemsStart = -1;
+	columnItemsEnd = -1;
+
+	QTableWidgetItem* firstItem = itemTable->item(0, 0);
+
+	if (firstItem != nullptr && !firstItem->text().isEmpty())
+	{
+		columnItemsStart = findColumnInTableHeader(consumeTable, firstItem->text());
+	}
+
+	QTableWidgetItem* lastItem = itemTable->item(itemTable->rowCount() - 1, 0);
+
+	if (lastItem != nullptr && !lastItem->text().isEmpty())
+	{
+		columnItemsEnd = findColumnInTableHeader(consumeTable, lastItem->text());
+	}
+
+	if (columnCarryover == -1 || columnDeposits == -1 || columnTurnover == -1 || columnDebt == -1 || columnCredit == -1 || columnItemsStart == -1 || columnItemsEnd == -1)
+	{
+		std::cout << "Could not find the needed table headers in consume table" << std::endl;
+		return false;
+	}
+
+	return true;
 }
 
 void MainWindow::onButtonAddItemClick()
@@ -282,7 +448,7 @@ bool MainWindow::checkIntDigitString(std::string& digitString)
 		std::string digitCleaned;
 		if (digitString.find('-') != std::string::npos)
 		{
-			digitCleaned = digitString.substr(digitString.find('-')+1, digitString.length());
+			digitCleaned = digitString.substr(digitString.find('-') + 1, digitString.length());
 		}
 		else
 		{
@@ -311,7 +477,9 @@ bool MainWindow::checkDoubleDigitString(std::string& digitString)
 
 	std::replace(digitString.begin(), digitString.end(), ',', '.'); //replace all , with .
 
-	if (digitString.find('.') == std::string::npos) //see if . was found
+	size_t posPoint = digitString.find('.');
+
+	if (posPoint == std::string::npos) //see if . was found
 	{
 		if (checkIntDigitString(digitString))
 		{
@@ -329,6 +497,8 @@ bool MainWindow::checkDoubleDigitString(std::string& digitString)
 		std::string::difference_type n = std::count(digitString.begin(), digitString.end(), '.'); //count number of .
 		if (n == 1)
 		{
+			digitString.erase(posPoint + 3); //erase after two digits after '.'
+
 			std::string firstDigitsCleaned;
 
 			std::string firstDigits = digitString.substr(0, digitString.find('.'));
@@ -583,34 +753,18 @@ void MainWindow::onItemTableWidgetConsumeChanged(QTableWidgetItem* changedItem)
 	}
 	else
 	{
-		int columnCarryover = findColumnInTableHeader(tableWidget, "Uebertrag");
-		int columnDeposits = findColumnInTableHeader(tableWidget, "Einzahlungen");
-		int columnTurnover = findColumnInTableHeader(tableWidget, "Umsatz");
-		int columnDebt = findColumnInTableHeader(tableWidget, "Schulden");
-		int columnCredit = findColumnInTableHeader(tableWidget, "Guthaben");
+		int columnCarryover;
+		int columnDeposits;
+		int columnTurnover;
+		int columnDebt;
+		int columnCredit;
 
-		int columnItemsStart = -1;
-		int columnItemsEnd = -1;
+		int columnItemsStart;
+		int columnItemsEnd;
 
-		QTableWidgetItem* firstItem = ui->tableWidget_items->item(0, 0);
-
-		if (firstItem != nullptr && !firstItem->text().isEmpty())
+		if (!findRelevantColumnIndexes(tableWidget, ui->tableWidget_items, columnCarryover, columnDeposits, columnTurnover, columnDebt, columnCredit, columnItemsStart, columnItemsEnd))
 		{
-			std::cout << "First item in item table: " << firstItem->text().toStdString() << std::endl;
-			columnItemsStart = findColumnInTableHeader(tableWidget, firstItem->text());
-		}
-
-		QTableWidgetItem* lastItem = ui->tableWidget_items->item(ui->tableWidget_items->rowCount() - 1, 0);
-
-		if (lastItem != nullptr && !lastItem->text().isEmpty())
-		{
-			std::cout << "Last item in item table: " << lastItem->text().toStdString() << std::endl;
-			columnItemsEnd = findColumnInTableHeader(tableWidget, lastItem->text());
-		}
-
-		if (columnCarryover == -1 || columnDeposits == -1 || columnTurnover == -1 || columnDebt == -1 || columnCredit == -1 || columnItemsStart == -1 || columnItemsEnd == -1)
-		{
-			std::cout << "Could not find the needed table headers in consume table" << std::endl;
+			std::cout << "Error! Could not find column indexes" << std::endl;
 			return;
 		}
 
@@ -659,7 +813,7 @@ void MainWindow::onItemTableWidgetConsumeChanged(QTableWidgetItem* changedItem)
 	writeTableWidgetToCSVfile(consumationCSVPath, tableWidget);
 }
 
-void MainWindow::generateItemValueMap(QTableWidget* itemTable, QTableWidget* consumeTable, int columnItemsStart, int columnItemsEnd, std::map<int, double> &outItemValueMap)
+void MainWindow::generateItemValueMap(QTableWidget* itemTable, QTableWidget* consumeTable, int columnItemsStart, int columnItemsEnd, std::map<int, double>& outItemValueMap)
 {
 	std::cout << "Trying to generate item value map" << std::endl;
 
@@ -685,7 +839,7 @@ void MainWindow::generateItemValueMap(QTableWidget* itemTable, QTableWidget* con
 					{
 						double itemValue = itemValueInItemTable->text().toDouble();
 
-						std::cout << "Item " << itemName.toStdString() << " in column "<<columnItems<<" has value " << itemValue << std::endl;
+						std::cout << "Item " << itemName.toStdString() << " in column " << columnItems << " has value " << itemValue << std::endl;
 						outItemValueMap.insert(std::pair<int, double>(columnItems, itemValue));
 					}
 				}
@@ -723,7 +877,7 @@ bool MainWindow::calculateAndUpdateConsumeTable(QTableWidget* consumeTable, QTab
 		{
 			QTableWidgetItem* itemItem = consumeTable->item(row, columnItems);
 
-			if (itemItem != nullptr&&!itemItem->text().isEmpty())
+			if (itemItem != nullptr && !itemItem->text().isEmpty())
 			{
 				int itemQuantity = 0;
 				itemQuantity = itemItem->text().toInt();
@@ -820,7 +974,7 @@ void MainWindow::onItemTableWidgetConsumeDoubleClicked(QTableWidgetItem* item)
 	int columnDebt = findColumnInTableHeader(tableWidget, "Schulden");
 	int columnCredit = findColumnInTableHeader(tableWidget, "Guthaben");
 
-	if (item->column() == columnCarryover || item->column() == columnDebt || item->column() == columnCredit||item->column() == columnTurnover)
+	if (item->column() == columnCarryover || item->column() == columnDebt || item->column() == columnCredit || item->column() == columnTurnover)
 	{
 		std::cout << "Item can not be edited" << std::endl;
 		item->setFlags(item->flags() & ~Qt::ItemIsEditable);
