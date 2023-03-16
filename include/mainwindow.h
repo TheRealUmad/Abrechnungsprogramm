@@ -34,27 +34,67 @@ public:
     bool addRowToTableWidget(QTableWidget* tableWidget, CSVRow row);
     bool addRowToTableWidget(QTableWidget* tableWidget, CSVRow csvRow, std::vector<std::string> stringRow);
     bool deleteEmptyRowsOfTableWidget(QTableWidget* tableWidget);
-    bool addItemToTableWidget(QTableWidget* tableWidget, std::string item, int row, int column);
+    bool deleteEmptyColumnOfTableWidget(QTableWidget* tableWidget);
+    bool addItemToTableWidget(QTableWidget* tableWidget, std::string itemText, int row, int column);
+    bool addItemToTableWidget(QTableWidget* tableWidget, QTableWidgetItem* item, int row, int column);
+    bool addItemToTableWidget(QTableWidget* tableWidget, QTableWidgetItem* item, int row, int column, bool copyItem);
+    bool addItemToTableWidget(QTableWidget* tableWidget, QString itemText, int row, int column);
+    bool createFile(std::string filePath);
+    bool createDir(std::string dirPath);
+    bool copyFile(std::string fromPath, std::string toPath);
+    bool deleteFile(std::string filePath);
+    //bool deleteItemFromTableWidget(QTableWidget* tableWidget, int row, int column);
     bool writeTableWidgetToCSVfile(std::string csvFilePath, QTableWidget* tableWidget);
     bool isDigit(std::string str);
+    bool checkDoubleDigitString(std::string &digitString);
+    bool checkIntDigitString(std::string& digitString);
+    bool checkDoubleDigitItem(QTableWidgetItem* item);
+    bool checkIntDigitItem(QTableWidgetItem* item);
+
+    bool addItemToConsumeTableHeader(std::string itemName);
+    bool updateConsumeTableHeader();
+    bool generateConsumeTableHeader();
+
+    bool memberHasDebtOrCredit(int rowInConsumeTable, double &outDebt, double &outCredit);
     
-    bool findMemberByNameAndAlias(QTableWidget* tableWidget, std::string name, std::string alias, QTableWidgetItem* outName, QTableWidgetItem* outAlias);
-    bool findItemInHeader(QTableWidget* tableWidget, std::string itemName, QTableWidgetItem* outItemName);
+    bool findMemberByNameAndAlias(QTableWidget* tableWidget, QString firstName, QString lastName, QString alias, QTableWidgetItem* outFirstName, QTableWidgetItem* outLastName, QTableWidgetItem* outAlias);
+    int findColumnInTableHeader(QTableWidget* tableWidget, QString headerText);
+    bool deleteEmptyMemberFromTable(QTableWidget* tableWidget);
+    bool deleteRowFromMemberAndConsumeTable(int row);
+    bool restoreRowFromMemberOrConsumeTable(QTableWidget* tableWidgetToRestore, int rowToRestore);
+    bool updateMemberInMemberAndConsumeTable(QTableWidgetItem* changedItem);
+
+    bool calculateAndUpdateConsumeTable(QTableWidget* consumeTable,QTableWidget* itemTable, int columnCarryover, int columnDeposits, int columnTurnover, int columnDebt, int columnCredit, int columnItemsStart, int columnItemsEnd);
+    void generateItemValueMap(QTableWidget* itemTable, QTableWidget* consumeTable, int columnItemsStart, int columnItemsEnd, std::map<int,double> &outItemValueMap);
+
+    bool clearColumnOfTable(QTableWidget* tableWidget, int column);
+    bool copyColumnOfTable(QTableWidget* tableWidget, int columnFrom, int columnTo);
 
 public slots:
     void onButtonAddItemClick();
     void onButtonAddMemberClick();
-    void onItemTableWidgetItemsChanged();
-    void onItemTableWidgetMemberChanged();
-    void onItemTableWidgetConsumeChanged();
+    void onButtonNewCalculationClick();
+    void onItemTableWidgetItemsChanged(QTableWidgetItem*);
+    void onItemTableWidgetMemberChanged(QTableWidgetItem*);
+    void onItemTableWidgetConsumeChanged(QTableWidgetItem*);
+    void onItemTableWidgetConsumeDoubleClicked(QTableWidgetItem*);
     void onTableWidgetItemsRowInserted();
     void onTableWidgetItemsRowDeleted();
 private:
     Ui::MainWindow *ui;
-    std::filesystem::path itemCSVPath = std::filesystem::current_path() / "Artikel.csv";
-    std::filesystem::path memberCSVPath = std::filesystem::current_path() / "Mitglieder.csv";
-    std::filesystem::path consumationCSVPath = std::filesystem::current_path() / "Abrechnung.csv";
 
+    std::string exePath;
+    std::string itemCSVPath;
+    std::string memberCSVPath;
+    std::string consumationCSVPath;
+    std::string saveFileDir;
+    std::string saveFilePath;
+
+    /*std::filesystem::path itemCSVPath = std::filesystem::current_path() / "Artikel.csv";
+    std::filesystem::path memberCSVPath = std::filesystem::current_path() / "Mitglieder.csv";
+    std::filesystem::path consumationCSVPath = std::filesystem::current_path() / "Abrechnung.csv";*/
+
+    int itemsInConsumeTableIndex;
 };
 
 #endif // MAINWINDOW_H

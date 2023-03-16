@@ -58,7 +58,5 @@ QStringList AddItemDialog::getStrings(QWidget* parent, bool* ok)
 		}
 	}
 
-	dialog->deleteLater();
-
 	return list;
 }

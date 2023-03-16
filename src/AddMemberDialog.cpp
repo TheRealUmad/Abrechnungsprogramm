@@ -14,17 +14,23 @@ AddMemberDialog::AddMemberDialog(QWidget* parent) : QDialog(parent)
 
 	QFormLayout* layout = new QFormLayout(this);
 
-	QLabel* lbl_ItemName = new QLabel(QString("Coleurname:"), this);
-	QLineEdit* tb_ItemName = new QLineEdit(this);
+	QLabel* lbl_memberAlias = new QLabel(QString("Coleurname:"), this);
+	QLineEdit* tb_memberAlias = new QLineEdit(this);
 
-	layout->addRow(lbl_ItemName, tb_ItemName);
-	fields << tb_ItemName;
+	layout->addRow(lbl_memberAlias, tb_memberAlias);
+	fields << tb_memberAlias;
 
-	QLabel* lbl_ItemValue = new QLabel(QString("Name:"), this);
-	QLineEdit* tb_ItemValue = new QLineEdit(this);
+	QLabel* lbl_memberFirstName = new QLabel(QString("Vorname:"), this);
+	QLineEdit* tb_memberFirstName = new QLineEdit(this);
 
-	layout->addRow(lbl_ItemValue, tb_ItemValue);
-	fields << tb_ItemValue;
+	layout->addRow(lbl_memberFirstName, tb_memberFirstName);
+	fields << tb_memberFirstName;
+
+	QLabel* lbl_memberLastName = new QLabel(QString("Nachname:"), this);
+	QLineEdit* tb_memberLastName = new QLineEdit(this);
+
+	layout->addRow(lbl_memberLastName, tb_memberLastName);
+	fields << tb_memberLastName;
 
 	QDialogButtonBox* buttonBox = new QDialogButtonBox
 	(QDialogButtonBox::Ok | QDialogButtonBox::Cancel,
@@ -57,8 +63,6 @@ QStringList AddMemberDialog::getStrings(QWidget* parent, bool* ok)
 			list << field->text();
 		}
 	}
-
-	dialog->deleteLater();
 
 	return list;
 }
