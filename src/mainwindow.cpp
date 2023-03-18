@@ -497,7 +497,10 @@ bool MainWindow::checkDoubleDigitString(std::string& digitString)
 		std::string::difference_type n = std::count(digitString.begin(), digitString.end(), '.'); //count number of .
 		if (n == 1)
 		{
-			digitString.erase(posPoint + 3); //erase after two digits after '.'
+			if (digitString.length() > posPoint + 3)
+			{
+				digitString.erase(posPoint + 3); //erase after two digits after '.'
+			}
 
 			std::string firstDigitsCleaned;
 
