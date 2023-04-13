@@ -163,24 +163,40 @@ void MainWindow::onButtonPrintToPdfClick()
 	headerTexts.push_back(headerTextDebt);
 	headerTexts.push_back(headerTextCredit);
 
+	int columnCarryoverPdf = 0;
+	int columnDepositsPdf = 0;
+	int columnTurnoverPdf = 0;
+	int columnDebtPdf = 0;
+	int columnCreditPdf = 0;
+
 	std::map<int, int> columnTranslatorMap;
 
 	int columnAlias = findColumnInTableHeader(consumeTable, headerTextAlias);
 	columnTranslatorMap.insert(std::pair<int, int>(columnCount, columnAlias));
 	columnCount++;
+
 	int columnCarryover = findColumnInTableHeader(consumeTable, headerTextCarryover);
+	columnCarryoverPdf = columnCount;
 	columnTranslatorMap.insert(std::pair<int, int>(columnCount, columnCarryover));
 	columnCount++;
+
 	int columnDeposits = findColumnInTableHeader(consumeTable, headerTextDeposits);
+	columnDepositsPdf = columnCount;
 	columnTranslatorMap.insert(std::pair<int, int>(columnCount, columnDeposits));
 	columnCount++;
+
 	int columnTurnover = findColumnInTableHeader(consumeTable, headerTextTurnover);
+	columnTurnoverPdf = columnCount;
 	columnTranslatorMap.insert(std::pair<int, int>(columnCount, columnTurnover));
 	columnCount++;
+
 	int columnDebt = findColumnInTableHeader(consumeTable, headerTextDebt);
+	columnDebtPdf = columnCount;
 	columnTranslatorMap.insert(std::pair<int, int>(columnCount, columnDebt));
 	columnCount++;
+
 	int columnCredit = findColumnInTableHeader(consumeTable, headerTextCredit);
+	columnCreditPdf = columnCount;
 	columnTranslatorMap.insert(std::pair<int, int>(columnCount, columnCredit));
 	columnCount++;
 
@@ -203,6 +219,10 @@ void MainWindow::onButtonPrintToPdfClick()
 	QTextCharFormat textFormat;
 	textFormat.setBackground(Qt::white);
 
+	QTextCharFormat boldCellFormat;
+	boldCellFormat.setFontWeight(QFont::Bold);
+	boldCellFormat.setBackground(Qt::white);
+
 	QTextCharFormat redFormat;
 	redFormat.setBackground(Qt::red);
 
@@ -218,7 +238,9 @@ void MainWindow::onButtonPrintToPdfClick()
 
 	cursor.movePosition(QTextCursor::Start);
 
-	QTextTable* table = cursor.insertTable(consumeTable->rowCount() + 1, columnCount, tableFormat); //+1 because table header
+	int rowCount = consumeTable->rowCount() + 2; // +2 because table header and sum row
+
+	QTextTable* table = cursor.insertTable(rowCount, columnCount, tableFormat);
 
 	std::cout << "Generating document table header" << std::endl;
 	for (int column = 0; column < columnCount; column++)
@@ -228,14 +250,20 @@ void MainWindow::onButtonPrintToPdfClick()
 		headerCellCursor.insertText(headerTexts.at(column), boldFormat);
 	}
 
+	double sumTurnover = 0.0;
+	double sumDebt = 0.0;
+	double sumCredit = 0.0;
+	double sumDeposits = 0.0;
+
 	std::cout << "Generating document table items" << std::endl;
 	for (int row = 0; row < consumeTable->rowCount(); row++)
 	{
 		QTextCharFormat cellFormat = row % 2 == 0 ? textFormat : alternateCellFormat;
 		for (int column = 0; column < columnCount; column++)
 		{
+			int columnInConsumeTable = columnTranslatorMap.at(column);
 
-			QTableWidgetItem* consumeTableItem = consumeTable->item(row, columnTranslatorMap.at(column));
+			QTableWidgetItem* consumeTableItem = consumeTable->item(row, columnInConsumeTable);
 
 			if (consumeTableItem != nullptr && !consumeTableItem->text().isEmpty())
 			{
@@ -254,11 +282,50 @@ void MainWindow::onButtonPrintToPdfClick()
 				std::string cellText = consumeTableItem->text().toStdString();
 				checkDoubleDigitString(cellText);
 
+				if (columnInConsumeTable == columnCredit)
+					sumCredit += std::stod(cellText);
+				else if (columnInConsumeTable == columnDebt)
+					sumDebt += std::stod(cellText);
+				else if (columnInConsumeTable == columnTurnover)
+					sumTurnover += std::stod(cellText);
+				else if (columnInConsumeTable == columnDeposits)
+					sumDeposits += std::stod(cellText);
+
 				std::cout << "Inserting text " << cellText << " from consume table into document" << std::endl;
 				cellCursor.insertText(QString::fromStdString(cellText));
 			}
 		}
 	}
+
+	//Create sum row
+	QTextTableCell cell = table->cellAt(rowCount - 1, columnTurnoverPdf);
+	QTextCursor cellCursor = cell.firstCursorPosition();
+	cell.setFormat(boldCellFormat);
+	std::string cellText = std::to_string(sumTurnover);
+	checkDoubleDigitString(cellText);
+	cellCursor.insertText(QString::fromStdString(cellText));
+
+	cell = table->cellAt(rowCount - 1, columnCreditPdf);
+	cellCursor = cell.firstCursorPosition();
+	cell.setFormat(boldCellFormat);
+	cellText = std::to_string(sumCredit);
+	checkDoubleDigitString(cellText);
+	cellCursor.insertText(QString::fromStdString(cellText));
+
+	cell = table->cellAt(rowCount - 1, columnDebtPdf);
+	cellCursor = cell.firstCursorPosition();
+	cell.setFormat(boldCellFormat);
+	cellText = std::to_string(sumDebt);
+	checkDoubleDigitString(cellText);
+	cellCursor.insertText(QString::fromStdString(cellText));
+
+	cell = table->cellAt(rowCount - 1, columnDepositsPdf);
+	cellCursor = cell.firstCursorPosition();
+	cell.setFormat(boldCellFormat);
+	cellText = std::to_string(sumDeposits);
+	checkDoubleDigitString(cellText);
+	cellCursor.insertText(QString::fromStdString(cellText));
+
 
 	cursor.movePosition(QTextCursor::End);
 	cursor.insertBlock();
