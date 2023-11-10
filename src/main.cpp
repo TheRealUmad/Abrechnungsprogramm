@@ -1,14 +1,36 @@
 #include <QtWidgets/QApplication>
 #include <mainwindow.h>
+#include <spdlog/spdlog.h>
 
 int main(int argc, char* argv[])
 {
+	spdlog::info("Application started.");
+
 	QApplication app(argc, argv);
 
 	MainWindow mainWindow;
-	mainWindow.show();
 
-	
+	int res;
+	try
+	{
+	    mainWindow.show();
+		res = app.exec();
 
-	return app.exec();
+		spdlog::info("Application closed.");
+
+		return res;
+	}
+	catch (const std::exception& ex)
+	{
+		spdlog::critical("Program failed! Exception: "+(std::string)ex.what());
+		return res;
+	}
+	catch (const std::string& ex)
+	{
+		spdlog::critical("Program failed! Exception: " + ex);
+	}
+	catch (...)
+	{
+		spdlog::critical("Program failed!");
+	}
 }
