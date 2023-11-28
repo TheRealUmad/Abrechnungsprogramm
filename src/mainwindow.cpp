@@ -5,6 +5,7 @@
 #include <QTableWidget>
 #include <AddItemDialog.h>
 #include <AddMemberDialog.h>
+#include <SearchMemberDialog.h>
 #include <qmessagebox.h>
 #include <FileHelper.h>
 #include <spdlog/spdlog.h>
@@ -17,6 +18,8 @@
 #include <CalculationHelper.h>
 #include <StringHelper.h>
 #include <PDFHelper.h>
+#include <StatisticsHelper.h>
+#include <QCloseEvent>
 
 MainWindow::MainWindow(QWidget* parent) :
 	QMainWindow(parent),
@@ -65,6 +68,12 @@ MainWindow::MainWindow(QWidget* parent) :
 		QObject::connect(ui->tableWidget_consume, &QTableWidget::itemDoubleClicked, this, &MainWindow::onItemTableWidgetConsumeDoubleClicked);
 		QObject::connect(ui->tableWidget_items->model(), &QAbstractTableModel::rowsInserted, this, &MainWindow::onTableWidgetItemsRowInserted);
 		QObject::connect(ui->tableWidget_items->model(), &QAbstractTableModel::rowsRemoved, this, &MainWindow::onTableWidgetItemsRowDeleted);
+
+		//shortcuts
+		keyCtrlF = new QShortcut(this);
+		keyCtrlF->setKey(Qt::CTRL + Qt::Key_F);
+
+		connect(keyCtrlF, SIGNAL(activated()), this, SLOT(shortcutCtrlF()));
 	}
 	catch (const std::exception& ex)
 	{
@@ -99,10 +108,18 @@ void MainWindow::initLogger()
 
 	spdlog::logger logger("logger", sink_list.begin(), sink_list.end());
 	logger.set_level(spdlog::level::debug);
+	logger.flush_on(spdlog::level::err);
 
 	spdlog::set_default_logger(std::make_shared<spdlog::logger>(logger));
 
 	spdlog::info("Logger started");
+}
+
+void MainWindow::closeEvent(QCloseEvent* event)
+{
+	spdlog::info("Main window closing.");
+	spdlog::default_logger()->flush();
+	event->accept();
 }
 
 void MainWindow::onButtonPrintToPdfClick()
@@ -113,6 +130,7 @@ void MainWindow::onButtonPrintToPdfClick()
 
 	PDFHelper::printCalculationToPdf(consumeTable, ConfigHandler::GetInstance()->GetAppConfig()->pdfFilePath);
 
+	StatisticsHelper::gatherStatistics(consumeTable, ui->tableWidget_items);
 }
 
 void MainWindow::onButtonNewCalculationClick()
@@ -170,7 +188,6 @@ void MainWindow::onButtonNewCalculationClick()
 		CalculationHelper::calculateAndUpdateConsumeTable(consumeTable, itemsTable, columnCarryover, columnDeposits, columnTurnover, columnDebt, columnCredit, columnItemsStart, columnItemsEnd);
 		consumeTable->blockSignals(false);
 
-		//consumeTable->update();
 		TableWidgetHelper::writeTableWidgetToCSVfile(ConfigHandler::GetInstance()->GetAppConfig()->consumationCSVPath, consumeTable);
 
 		spdlog::info("Ready for new calculation.");
@@ -288,12 +305,7 @@ void MainWindow::onButtonAddMemberClick()
 		return;
 	}
 
-	/*ui->tableWidget_member->blockSignals(true);
-	ui->tableWidget_member->blockSignals(true);*/
 	TableWidgetHelper::addRowToTableWidget(ui->tableWidget_member, newRow);
-	//addRowToTableWidget(ui->tableWidget_consume, newRow);
-	/*ui->tableWidget_member->blockSignals(false);
-	ui->tableWidget_member->blockSignals(false);*/
 }
 
 void MainWindow::onItemTableWidgetItemsChanged(QTableWidgetItem* changedItem)
@@ -330,7 +342,6 @@ void MainWindow::onItemTableWidgetItemsChanged(QTableWidgetItem* changedItem)
 		tableWidget->removeRow(changedItem->row());
 	}
 
-	//deleteEmptyRowsOfTableWidget(tableWidget);
 	TableWidgetHelper::writeTableWidgetToCSVfile(ConfigHandler::GetInstance()->GetAppConfig()->itemCSVPath, tableWidget);
 }
 
@@ -362,23 +373,13 @@ void MainWindow::onItemTableWidgetMemberChanged(QTableWidgetItem* changedItem)
 		memberLastName = tableWidget->item(changedItem->row(), 2)->text();
 	}
 
-	/*QTableWidgetItem* memberAliasInConsumeTable;
-	QTableWidgetItem* memberFirstNameInConsumeTable;
-	QTableWidgetItem* memberLastNameInConsumeTable;*/
-
-	/*if (!findMemberByNameAndAlias(tableWidget, memberFirstName, memberLastName, memberAlias, memberFirstNameInConsumeTable, memberLastNameInConsumeTable, memberAliasInConsumeTable))
-	{
-		std::cout << "Member: " << memberFirstName.toStdString() << " " << memberLastName.toStdString() << " v/o " << memberAlias.toStdString() << " was not found in table widget: " << tableWidget->objectName().toStdString() << std::endl;*/
-
 	if (memberAlias.isEmpty() && memberFirstName.isEmpty() && memberLastName.isEmpty())
 	{
 		spdlog::info("Member will be deleted, because name and alias is empty.");
 
 		deleteEmptyMemberFromTable(tableWidget);
 	}
-	//}
 
-	//deleteEmptyRowsOfTableWidget(tableWidget);
 	updateMemberInMemberAndConsumeTable(changedItem);
 	TableWidgetHelper::writeTableWidgetToCSVfile(ConfigHandler::GetInstance()->GetAppConfig()->memberCSVPath, tableWidget);
 	TableWidgetHelper::writeTableWidgetToCSVfile(ConfigHandler::GetInstance()->GetAppConfig()->consumationCSVPath, tableWidget);
@@ -479,7 +480,6 @@ void MainWindow::onItemTableWidgetConsumeChanged(QTableWidgetItem* changedItem)
 		}
 	}
 
-	//deleteEmptyRowsOfTableWidget(tableWidget);
 	TableWidgetHelper::writeTableWidgetToCSVfile(ConfigHandler::GetInstance()->GetAppConfig()->memberCSVPath, tableWidget);
 	TableWidgetHelper::writeTableWidgetToCSVfile(ConfigHandler::GetInstance()->GetAppConfig()->consumationCSVPath, tableWidget);
 }
@@ -511,6 +511,37 @@ void MainWindow::onTableWidgetItemsRowInserted()
 void MainWindow::onTableWidgetItemsRowDeleted()
 {
 
+}
+
+void MainWindow::shortcutCtrlF()
+{
+	spdlog::info("Shortcut STRG + F pressed.");
+
+	QStringList list = SearchMemberDialog::getStrings(this);
+
+	QTableWidgetItem* alias;
+
+	if (TableWidgetHelper::findMemberByAliasInConsumeTable(ui->tableWidget_consume, list[0], alias))
+	{
+		spdlog::info("Trying to focus row of member: " + alias->text().toStdString());
+
+		int columnToFocus = -1;
+		columnToFocus = ui->tableWidget_consume->currentColumn();
+		if (columnToFocus == -1)
+		{
+			columnToFocus == alias->column();
+		}
+
+		ui->tableWidget_consume->setCurrentCell(alias->row(), columnToFocus);
+
+		spdlog::info("Set focus to cell in row: " + std::to_string(alias->row()) + " and column: " + std::to_string(columnToFocus));
+	}
+	else
+	{
+		spdlog::info("Could not find member in consume table.");
+	}
+
+	spdlog::info("Finished STRG + F");
 }
 
 bool MainWindow::deleteEmptyMemberFromTable(QTableWidget* tableWidget)
@@ -633,9 +664,8 @@ bool MainWindow::updateMemberInMemberAndConsumeTable(QTableWidgetItem* changedIt
 			}
 
 			spdlog::info("Trying to insert item from consume table into member table.");
-			//ui->tableWidget_member->blockSignals(true);
+
 			TableWidgetHelper::addItemToTableWidget(ui->tableWidget_member, changedItem->text(), changedItem->row(), changedItem->column());
-			//ui->tableWidget_member->blockSignals(false);
 		}
 		else
 		{
@@ -654,9 +684,7 @@ bool MainWindow::updateMemberInMemberAndConsumeTable(QTableWidgetItem* changedIt
 			}
 
 			spdlog::info("Trying to insert item from member table into consume table.");
-			//ui->tableWidget_consume->blockSignals(true);
 			TableWidgetHelper::addItemToTableWidget(ui->tableWidget_consume, changedItem->text(), changedItem->row(), changedItem->column());
-			//ui->tableWidget_consume->blockSignals(true);
 		}
 		else
 		{
@@ -769,22 +797,6 @@ bool MainWindow::fillMemberList()
 	TableWidgetHelper::readCSVAndAddToTableWidget(ConfigHandler::GetInstance()->GetAppConfig()->memberCSVPath, ui->tableWidget_member);
 
 	spdlog::info("Successfully filled member list");
-	/*std::vector<CSVRow> rows;
-
-	if (!readCSVFile(memberCSVPath, rows))
-	{
-		std::cerr << "Error reading csv file!" << std::endl;
-		return false;
-	}
-
-	for (CSVRow row : rows)
-	{
-		if (!addRowToTableWidget(ui->tableWidget_member, row))
-		{
-			std::cerr << "Error adding row to table!" << std::endl;
-			return false;
-		}
-	}*/
 
 	return true;
 }

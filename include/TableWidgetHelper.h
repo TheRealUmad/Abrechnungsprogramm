@@ -24,9 +24,10 @@ public:
 	static bool generateConsumeTableHeader(QTableWidget* consumeTableWidget, QTableWidget* memberTableWidget, QTableWidget* itemsTableWidget);
 	static bool addItemToConsumeTableHeader(QTableWidget* consumeTableWidget, std::string itemName);
 
-	static bool findMemberByNameAndAlias(QTableWidget* tableWidget, QString firstName, QString lastName, QString alias, QTableWidgetItem* outFirstName, QTableWidgetItem* outLastName, QTableWidgetItem* outAlias);
+	static bool findMemberByNameAndAlias(QTableWidget* tableWidget, QString firstName, QString lastName, QString alias, QTableWidgetItem*& outFirstName, QTableWidgetItem*& outLastName, QTableWidgetItem*& outAlias);
 	static int findColumnInTableHeader(QTableWidget* tableWidget, QString headerText);
 	static bool findRelevantColumnIndexes(QTableWidget* consumeTable, QTableWidget* itemTable, int& columnCarryover, int& columnDeposits, int& columnTurnover, int& columnDebt, int& columnCredit, int& columnItemsStart, int& columnItemsEnd);
+	static bool findMemberByAliasInConsumeTable(QTableWidget* tableWidget, QString alias, QTableWidgetItem* &outAlias);
 
 	static bool clearColumnOfTable(QTableWidget* tableWidget, int column);
 	static bool copyColumnOfTable(QTableWidget* tableWidget, int columnFrom, int columnTo);

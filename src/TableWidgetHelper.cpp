@@ -3,6 +3,7 @@
 #include <QString>
 #include <FileHelper.h>
 #include <ConfigHandler.h>
+#include <StringHelper.h>
 
 bool TableWidgetHelper::addRowToTableWidget(QTableWidget* tableWidget, std::vector<std::string> row)
 {
@@ -156,12 +157,12 @@ bool TableWidgetHelper::addItemToTableWidget(QTableWidget* tableWidget, QTableWi
 	while (tableWidget->rowCount() - 1 < row)
 	{
 		tableWidget->insertRow(row);
-		spdlog::info("Increased row count of table widget: " + tableWidget->objectName().toStdString()+" by one.");
+		spdlog::debug("Increased row count of table widget: " + tableWidget->objectName().toStdString()+" by one.");
 	}
 
 	tableWidget->setItem(row, column, item);
 
-	spdlog::info("Added item: " + item->text().toStdString() + " to table widget: " + tableWidget->objectName().toStdString());
+	spdlog::debug("Added item: " + item->text().toStdString() + " to table widget: " + tableWidget->objectName().toStdString());
 	return true;
 }
 
@@ -328,7 +329,7 @@ bool TableWidgetHelper::addItemToConsumeTableHeader(QTableWidget* consumeTableWi
 	return true;
 }
 
-bool TableWidgetHelper::findMemberByNameAndAlias(QTableWidget* tableWidget, QString firstName, QString lastName, QString alias, QTableWidgetItem* outFirstName, QTableWidgetItem* outLastName, QTableWidgetItem* outAlias)
+bool TableWidgetHelper::findMemberByNameAndAlias(QTableWidget* tableWidget, QString firstName, QString lastName, QString alias, QTableWidgetItem* &outFirstName, QTableWidgetItem* &outLastName, QTableWidgetItem* &outAlias)
 {
 	spdlog::info("Trying to find member: " + firstName.toStdString() + " " + lastName.toStdString() + " v/o " + alias.toStdString() + " in table widget: " + tableWidget->objectName().toStdString());
 
@@ -338,7 +339,7 @@ bool TableWidgetHelper::findMemberByNameAndAlias(QTableWidget* tableWidget, QStr
 
 	int matches = 0;
 
-	for (int row = 0; row < tableWidget->rowCount(); row++)
+	for (int row = 0; row < tableWidget->rowCount()-1; row++)
 	{
 
 		QTableWidgetItem* aliasToCompare = tableWidget->item(row, 0);
@@ -517,6 +518,109 @@ bool TableWidgetHelper::findRelevantColumnIndexes(QTableWidget* consumeTable, QT
 
 	spdlog::info("Successfully found relevant column indexes.");
 	return true;
+}
+
+bool TableWidgetHelper::findMemberByAliasInConsumeTable(QTableWidget* tableWidget, QString alias, QTableWidgetItem* &outAlias)
+{
+	spdlog::info("Trying to find member with alias: " + alias.toStdString() + " in table widget: " + tableWidget->objectName().toStdString());
+
+	if (alias.isEmpty())
+	{
+		spdlog::warn("Alias is empty!");
+		return false;
+	}
+
+	int matches = 0;
+	int partialMatchesCs = 0;
+	int partialMatchesCis = 0;
+
+	QTableWidgetItem* lastMatch;
+	QTableWidgetItem* lastPartialMatchCs;
+	QTableWidgetItem* lastPartialMatchCis;
+
+	for (int row = 0; row < tableWidget->rowCount(); row++)
+	{
+		QTableWidgetItem* aliasToCompare = tableWidget->item(row, 0);
+		
+		if (aliasToCompare!=nullptr && aliasToCompare->text() == alias)
+		{
+			spdlog::info("Found perfect match.");
+			matches++;
+			//lastMatch = std::pair<int,int>(aliasToCompare->row(), aliasToCompare->column());
+			lastMatch = aliasToCompare;
+		}
+		else if(aliasToCompare!=nullptr && alias.count()>=4)
+		{
+			spdlog::debug("Trying to find partial match.");
+
+			if (aliasToCompare->text().contains(alias, Qt::CaseSensitive))
+			{
+				spdlog::info("Found partial match:" + aliasToCompare->text().toStdString() + " (case sensitive).");
+				partialMatchesCs++;
+				//lastPartialMatchCs = std::pair<int,int>(aliasToCompare->row(), aliasToCompare->column());
+				lastPartialMatchCs = aliasToCompare;
+			}
+			else if(aliasToCompare->text().contains(alias, Qt::CaseInsensitive))
+			{
+				spdlog::info("Found partial match: " + aliasToCompare->text().toStdString() + " (case insensitive).");
+				partialMatchesCis++;
+				//lastPartialMatchCis = std::pair<int,int>(aliasToCompare->row(), aliasToCompare->column());
+				lastPartialMatchCis = aliasToCompare;
+			}
+			else
+			{
+				spdlog::debug("Found no partial match.");
+			}
+		}
+		else if (aliasToCompare != nullptr)
+		{
+			spdlog::warn("Cannot partially match: " + alias.toStdString() + ", because there are to few characters in the string! (minimum 4 characters needed)");
+		}
+		else
+		{
+			spdlog::warn("Alias in table widget was empty!");
+		}
+	}
+
+	if (matches >= 1)
+	{
+		if (matches == 1)
+			spdlog::info("Found exactly one perfect match.");
+		else
+			spdlog::info("Found: " + std::to_string(matches) + " perfect matches. Returning the last one.");
+
+		//outAlias = tableWidget->item(lastMatch.first, lastMatch.second);
+		outAlias = lastMatch;
+		return true;
+	}
+	else if(partialMatchesCs >= 1)
+	{
+		if (partialMatchesCs == 1)
+			spdlog::info("Found exactly one partial case sensitive match.");
+		else
+			spdlog::info("Found: " + std::to_string(partialMatchesCs) + " partial case sensitive matches. Returning the last one.");
+
+		//outAlias = tableWidget->item(lastPartialMatchCs.first, lastPartialMatchCs.second);
+		outAlias = lastPartialMatchCs;
+		return true;
+	}
+	else if (partialMatchesCis >= 1)
+	{
+		if (partialMatchesCis == 1)
+			spdlog::info("Found exactly one partial case insensitive match.");
+		else
+			spdlog::info("Found: " + std::to_string(partialMatchesCis) + " partial case insensitive matches. Returning the last one.");
+
+		//outAlias = tableWidget->item(lastPartialMatchCis.first, lastPartialMatchCis.second);
+		outAlias = lastPartialMatchCis;
+		return true;
+	}
+	else
+	{
+		spdlog::info("Found no match.");
+	}
+
+	return false;
 }
 
 bool TableWidgetHelper::clearColumnOfTable(QTableWidget* tableWidget, int column)

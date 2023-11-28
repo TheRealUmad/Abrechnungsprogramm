@@ -4,6 +4,7 @@
 #include <FileHelper.h>
 #include <exception>
 #include <chrono>
+#include <nlohmann/json.hpp>
 
 #ifdef _WIN32
 #include <Windows.h>
@@ -100,6 +101,9 @@ void ConfigHandler::Init()
 	(strrchr(pt, '\\'))[0] = 0;
 
 	mConfig->exePath = pt;
+
+	mConfig->configFile = mConfig->exePath + "/config.json";
+
 	mConfig->consumationCSVPath = mConfig->exePath + "/Abrechnung.csv";
 	mConfig->memberCSVPath = mConfig->exePath + "/Mitglieder.csv";
 	mConfig->itemCSVPath = mConfig->exePath + "/Artikel.csv";
@@ -107,8 +111,23 @@ void ConfigHandler::Init()
 	mConfig->saveFilePath = mConfig->saveFileDir + "/Artikel_SicherungsKopie.csv";
 	mConfig->logFileDir = mConfig->exePath + "/Logs";
 	mConfig->pdfFileDir = mConfig->exePath + "/PDFs";
-
 	mConfig->pdfFilePath = mConfig->pdfFileDir + "/Abrechnung-"+GetCurrentDateStr() + ".pdf";
+	mConfig->statisticsPath = mConfig->pdfFileDir + "/Statistik-Abrechnung-" + GetCurrentDateStr() + ".txt";
+	mConfig->debugDir = mConfig->exePath + "/Debug";
+	mConfig->statisticsDebugPath = mConfig->debugDir + "/DebugStatistics.json";
+
+	mConfig->debtThreshhold = 50.0;
+
+	if (std::filesystem::is_regular_file(mConfig->configFile))
+	{
+		spdlog::info("Config file already exists.");
+		ReadConfigFile();
+	}
+	else
+	{
+		FileHelper::checkFile(mConfig->configFile);
+		WriteConfigFile();
+	}
 
 	bool checkOk = true;
 
@@ -124,6 +143,11 @@ void ConfigHandler::Init()
 	checkOk = checkOk && FileHelper::checkDir(mConfig->pdfFileDir);
 	checkOk = checkOk && FileHelper::checkFile(mConfig->pdfFilePath);
 
+	checkOk = checkOk && FileHelper::checkFile(mConfig->statisticsPath);
+
+	checkOk = checkOk && FileHelper::checkDir(mConfig->debugDir);
+	checkOk = checkOk && FileHelper::checkFile(mConfig->statisticsDebugPath);
+
 	if (checkOk)
 		spdlog::info("All dirs and files are ok.");
 	else
@@ -133,4 +157,73 @@ void ConfigHandler::Init()
 		throw std::exception(message.c_str());
 	}
 
+}
+
+void ConfigHandler::ReadConfigFile()
+{
+	spdlog::info("Trying to read config file: " + mConfig->configFile);
+
+	std::ifstream inputFile(mConfig->configFile);
+	nlohmann::json jsonConfig;
+	inputFile >> jsonConfig;
+	inputFile.close();
+
+	try
+	{
+		/*mConfig->consumationCSVPath = jsonConfig["ConsumationCsvPath"].get<std::string>();
+		mConfig->memberCSVPath = jsonConfig["MemberCsvPath"].get<std::string>();
+		mConfig->itemCSVPath = jsonConfig["ItemCsvPath"].get<std::string>();
+
+		mConfig->saveFileDir = jsonConfig["SaveFileDir"].get<std::string>();
+		mConfig->saveFilePath = jsonConfig["SaveFilePath"].get<std::string>();
+
+		mConfig->logFileDir = jsonConfig["LogFileDir"].get<std::string>();
+
+		mConfig->pdfFileDir = jsonConfig["PdfFileDir"].get<std::string>();
+		mConfig->pdfFilePath = jsonConfig["PdfFilePath"].get<std::string>();
+
+		mConfig->statisticsPath = jsonConfig["StatisticsPath"].get<std::string>();
+
+		mConfig->debugDir = jsonConfig["DebugDir"].get<std::string>();
+		mConfig->statisticsDebugPath = jsonConfig["DebugStatisticsPath"].get<std::string>();*/
+
+		mConfig->debtThreshhold = jsonConfig["DebtThreshhold"].get<double>();
+	}
+	catch (const std::exception& ex)
+	{
+		spdlog::error("Could not read config file: " + mConfig->configFile + "! Exception: " + ex.what());
+	}
+
+	spdlog::info("Finished reading config file: " + mConfig->configFile);
+}
+
+void ConfigHandler::WriteConfigFile()
+{
+	spdlog::info("Trying to write config to file: " + mConfig->configFile);
+	nlohmann::json jsonConfig;
+
+	/*jsonConfig["ConsumationCsvPath"] = mConfig->consumationCSVPath;
+	jsonConfig["MemberCsvPath"] = mConfig->memberCSVPath;
+	jsonConfig["ItemCsvPath"] = mConfig->itemCSVPath;
+
+	jsonConfig["SaveFileDir"] = mConfig->saveFileDir;
+	jsonConfig["SaveFilePath"] = mConfig->saveFilePath;
+	
+	jsonConfig["LogFileDir"] = mConfig->logFileDir;
+
+	jsonConfig["PdfFileDir"] = mConfig->pdfFileDir;
+	jsonConfig["PdfFilePath"] = mConfig->pdfFilePath;
+
+	jsonConfig["StatisticsPath"] = mConfig->statisticsPath;
+
+	jsonConfig["DebugDir"] = mConfig->debugDir;
+	jsonConfig["DebugStatisticsPath"] = mConfig->statisticsDebugPath;*/
+
+	jsonConfig["DebtThreshhold"] = mConfig->debtThreshhold;
+
+	std::ofstream o(mConfig->configFile);
+	o << std::setw(4) << jsonConfig << std::endl;
+	o.close();
+
+	spdlog::info("Finished writing config to file: " + mConfig->configFile);
 }

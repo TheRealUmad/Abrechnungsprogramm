@@ -131,8 +131,8 @@ void PDFHelper::printCalculationToPdf(QTableWidget* consumeTableWidget, std::str
 			int columnInConsumeTable = columnTranslatorMap.at(column);
 
 			QTableWidgetItem* consumeTableItem = consumeTableWidget->item(row, columnInConsumeTable);
-
-			if (consumeTableItem != nullptr && !consumeTableItem->text().isEmpty())
+			std::string itemText = consumeTableItem->text().toStdString();
+			if (consumeTableItem != nullptr && !itemText.empty() && !std::all_of(itemText.begin(), itemText.end(), isspace))
 			{
 				QTextTableCell cell = table->cellAt(row + 1, column);
 				QTextCursor cellCursor = cell.firstCursorPosition();
@@ -146,20 +146,22 @@ void PDFHelper::printCalculationToPdf(QTableWidget* consumeTableWidget, std::str
 					cell.setFormat(cellFormat);
 				}
 
-				std::string cellText = consumeTableItem->text().toStdString();
-				StringHelper::checkDoubleDigitString(cellText);
+				if (column != 0)
+				{
+					StringHelper::checkDoubleDigitString(itemText);
+				}
 
 				if (columnInConsumeTable == columnCredit)
-					sumCredit += std::stod(cellText);
+					sumCredit += std::stod(itemText);
 				else if (columnInConsumeTable == columnDebt)
-					sumDebt += std::stod(cellText);
+					sumDebt += std::stod(itemText);
 				else if (columnInConsumeTable == columnTurnover)
-					sumTurnover += std::stod(cellText);
+					sumTurnover += std::stod(itemText);
 				else if (columnInConsumeTable == columnDeposits)
-					sumDeposits += std::stod(cellText);
+					sumDeposits += std::stod(itemText);
 
-				spdlog::info("Inserting text: " + cellText + " from consume table into document.");
-				cellCursor.insertText(QString::fromStdString(cellText));
+				spdlog::info("Inserting text: " + itemText + " from consume table into document.");
+				cellCursor.insertText(QString::fromStdString(itemText));
 			}
 		}
 	}

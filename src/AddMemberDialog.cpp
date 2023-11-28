@@ -6,6 +6,8 @@
 #include <QDialogButtonBox>
 #include <QInputDialog>
 #include <QStringList>
+#include <spdlog/spdlog.h>
+#include <StringHelper.h>
 
 
 AddMemberDialog::AddMemberDialog(QWidget* parent) : QDialog(parent)
@@ -50,6 +52,8 @@ AddMemberDialog::AddMemberDialog(QWidget* parent) : QDialog(parent)
 
 QStringList AddMemberDialog::getStrings(QWidget* parent, bool* ok)
 {
+	spdlog::info("Trying to show add member dialog.");
+
 	AddMemberDialog* dialog = new AddMemberDialog(parent);
 
 	QStringList list;
@@ -58,11 +62,16 @@ QStringList AddMemberDialog::getStrings(QWidget* parent, bool* ok)
 	if (ok)
 		*ok = !!ret;
 
+	spdlog::debug("Result of add member dialog: " + StringHelper::boolToString(ok));
+
 	if (ret) {
 		foreach(auto field, dialog->fields) {
 			list << field->text();
+			spdlog::debug("Text in field: " + field->text().toStdString());
 		}
 	}
+
+	spdlog::info("Finished add member dialog.");
 
 	return list;
 }

@@ -8,7 +8,11 @@ public:
 	static bool isDigit(std::string str);
 	static bool checkDoubleDigitString(std::string& digitString);
 	static bool checkIntDigitString(std::string& digitString);
-	static bool checkDoubleDigitItem(QTableWidgetItem* item);
-	static bool checkIntDigitItem(QTableWidgetItem* item);
+	static bool checkDoubleDigitItem(QTableWidgetItem* &item);
+	static bool checkIntDigitItem(QTableWidgetItem* &item);
+	static inline std::string boolToString(bool b)
+	{
+		return b ? "true" : "false";
+	}
 };
 

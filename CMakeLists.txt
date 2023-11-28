@@ -45,6 +45,9 @@ endif(CMAKE_TOOLCHAIN_FILE)
 #speedlog
 find_package(spdlog REQUIRED)
 
+#json
+find_package(nlohmann_json REQUIRED)
+
 #QT
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 set(CMAKE_AUTOMOC ON)
@@ -86,6 +89,7 @@ target_link_libraries(Abrechnungsprogramm Qt6::Widgets)
 target_link_libraries(Abrechnungsprogramm Qt6::PrintSupport)
 target_link_libraries(Abrechnungsprogramm ${QT_LIBRARIES} ${OPENGL_LIBRARIES})
 target_link_libraries(Abrechnungsprogramm spdlog::spdlog)
+target_link_libraries(Abrechnungsprogramm nlohmann_json::nlohmann_json)
 
 
 

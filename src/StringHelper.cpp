@@ -4,6 +4,12 @@
 bool StringHelper::isDigit(std::string str)
 {
 	spdlog::info("Trying to check if string: " + str + " is a number.");
+
+	if (str.empty()||std::all_of(str.begin(), str.end(), isspace))
+	{
+		spdlog::info("String: " + str + " is not a number");
+	}
+
 	if (std::all_of(str.begin(), str.end(), ::isdigit))
 	{
 		spdlog::info("String: " + str + " is a number.");
@@ -112,7 +118,7 @@ bool StringHelper::checkIntDigitString(std::string& digitString)
 	}
 }
 
-bool StringHelper::checkDoubleDigitItem(QTableWidgetItem* item)
+bool StringHelper::checkDoubleDigitItem(QTableWidgetItem* &item)
 {
 	spdlog::info("Trying to check double digit item.");
 
@@ -132,7 +138,7 @@ bool StringHelper::checkDoubleDigitItem(QTableWidgetItem* item)
 	}
 }
 
-bool StringHelper::checkIntDigitItem(QTableWidgetItem* item)
+bool StringHelper::checkIntDigitItem(QTableWidgetItem* &item)
 {
 	spdlog::info("Trying to check digit item.");
 

@@ -3,6 +3,8 @@
 
 struct AppConfig
 {
+	std::string configFile;
+
 	std::string exePath;
 	std::string itemCSVPath;
 	std::string memberCSVPath;
@@ -11,7 +13,12 @@ struct AppConfig
 	std::string saveFilePath;
 	std::string pdfFileDir;
 	std::string pdfFilePath;
+	std::string statisticsPath;
+	std::string statisticsDebugPath;
 	std::string logFileDir;
+	std::string debugDir;
+
+	double debtThreshhold;
 
 	int itemsInConsumeTableIndex;
 };
@@ -30,6 +37,8 @@ private:
 	ConfigHandler(void);
 	~ConfigHandler(void);
 	void Init();
+	void ReadConfigFile();
+	void WriteConfigFile();
 };
 
 
