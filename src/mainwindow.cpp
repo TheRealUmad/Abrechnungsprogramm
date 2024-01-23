@@ -20,6 +20,7 @@
 #include <PDFHelper.h>
 #include <StatisticsHelper.h>
 #include <QCloseEvent>
+#include <QScrollBar>
 
 MainWindow::MainWindow(QWidget* parent) :
 	QMainWindow(parent),
@@ -33,9 +34,19 @@ MainWindow::MainWindow(QWidget* parent) :
 		ErrorHandler::CreateInstance(this);
 
 		ConfigHandler::CreateInstance();
+
+		if (ConfigHandler::GetInstance()->GetAppConfig()->isDebugComputer)
+		{
+			::ShowWindow(::GetConsoleWindow(), SW_SHOW);
+		}
+
 		initLogger();
 
 		ErrorHandler::CreateInstance(this);
+
+		ui->tableWidget_consume->setAlternatingRowColors(true);
+		ui->tableWidget_items->setAlternatingRowColors(true);
+		ui->tableWidget_member->setAlternatingRowColors(true);
 
 		if (!fillItemList())
 		{
@@ -43,6 +54,8 @@ MainWindow::MainWindow(QWidget* parent) :
 			spdlog::error(message);
 			throw std::exception(message.c_str());
 		}
+
+		saveCopyOfTablewidgetItems();
 
 		if (!fillMemberList())
 		{
@@ -68,6 +81,7 @@ MainWindow::MainWindow(QWidget* parent) :
 		QObject::connect(ui->tableWidget_consume, &QTableWidget::itemDoubleClicked, this, &MainWindow::onItemTableWidgetConsumeDoubleClicked);
 		QObject::connect(ui->tableWidget_items->model(), &QAbstractTableModel::rowsInserted, this, &MainWindow::onTableWidgetItemsRowInserted);
 		QObject::connect(ui->tableWidget_items->model(), &QAbstractTableModel::rowsRemoved, this, &MainWindow::onTableWidgetItemsRowDeleted);
+		QObject::connect(ui->tableWidget_consume->horizontalScrollBar(), &QScrollBar::valueChanged, this, &MainWindow::onTableWidgetConsumeHorizontalScroll);
 
 		//shortcuts
 		keyCtrlF = new QShortcut(this);
@@ -99,7 +113,11 @@ MainWindow::~MainWindow()
 void MainWindow::initLogger()
 {
 	auto console_sink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
-	console_sink->set_level(spdlog::level::warn);
+
+	if (ConfigHandler::GetInstance()->GetAppConfig()->isDebugComputer)
+		console_sink->set_level(spdlog::level::debug);
+	else
+		console_sink->set_level(spdlog::level::warn);
 
 	auto file_sink = std::make_shared<spdlog::sinks::daily_file_sink_mt>(ConfigHandler::GetInstance()->GetAppConfig()->logFileDir + "/logfile", 23, 59);
 	file_sink->set_level(spdlog::level::debug);
@@ -128,8 +146,11 @@ void MainWindow::onButtonPrintToPdfClick()
 
 	QTableWidget* consumeTable = ui->tableWidget_consume;
 
+	FileHelper::checkFile(ConfigHandler::GetInstance()->GetAppConfig()->pdfFilePath);
 	PDFHelper::printCalculationToPdf(consumeTable, ConfigHandler::GetInstance()->GetAppConfig()->pdfFilePath);
 
+	FileHelper::checkFile(ConfigHandler::GetInstance()->GetAppConfig()->statisticsPath);
+	FileHelper::checkFile(ConfigHandler::GetInstance()->GetAppConfig()->statisticsDebugPath);
 	StatisticsHelper::gatherStatistics(consumeTable, ui->tableWidget_items);
 }
 
@@ -316,12 +337,14 @@ void MainWindow::onItemTableWidgetItemsChanged(QTableWidgetItem* changedItem)
 	spdlog::info("Item: " + changedItem->text().toStdString() + " changed in table widget: " + tableWidget->objectName().toStdString());
 
 	bool rowIsEmpty = true;
+	bool rowHasEmptyItem = false;
 	for (int column = 0; column < tableWidget->columnCount(); column++)
 	{
 		QTableWidgetItem* item = tableWidget->item(changedItem->row(), column);
 		if (item == nullptr || item->text().isEmpty())
 		{
 			rowIsEmpty = true;
+			rowHasEmptyItem = true;
 		}
 		else
 		{
@@ -330,19 +353,57 @@ void MainWindow::onItemTableWidgetItemsChanged(QTableWidgetItem* changedItem)
 		}
 	}
 
-	TableWidgetHelper::generateConsumeTableHeader(ui->tableWidget_consume, ui->tableWidget_member, ui->tableWidget_items);
+	if (!rowHasEmptyItem)
+	{
+		saveCopyOfTablewidgetItems();
+	}
 
 	if (rowIsEmpty)
 	{
-		TableWidgetHelper::deleteEmptyColumnOfTableWidget(ui->tableWidget_consume); //remove header from consume
-		TableWidgetHelper::writeTableWidgetToCSVfile(ConfigHandler::GetInstance()->GetAppConfig()->consumationCSVPath, ui->tableWidget_consume);
-		ConfigHandler::GetInstance()->GetAppConfig()->itemsInConsumeTableIndex--; //so next new item will be inserted correctly
+		if (TableWidgetHelper::deleteEmptyColumnOfTableWidget(this, ui->tableWidget_consume))//remove header from consume
+		{
+			ConfigHandler::GetInstance()->GetAppConfig()->itemsInConsumeTableIndex--; //so next new item will be inserted correctly
 
-		spdlog::info("Removing empty row with index: " + std::to_string(tableWidget->currentRow()) + " from table widget: " + tableWidget->objectName().toStdString());
-		tableWidget->removeRow(changedItem->row());
+			spdlog::info("Removing empty row with index: " + std::to_string(tableWidget->currentRow()) + " from table widget: " + tableWidget->objectName().toStdString());
+			tableWidget->removeRow(changedItem->row());
+
+			int columnCarryover;
+			int columnDeposits;
+			int columnTurnover;
+			int columnDebt;
+			int columnCredit;
+			int columnItemsStart;
+			int columnItemsEnd;
+
+			TableWidgetHelper::findRelevantColumnIndexes(ui->tableWidget_consume, ui->tableWidget_items, columnCarryover, columnDeposits, columnTurnover, columnDebt, columnCredit, columnItemsStart, columnItemsEnd);
+
+			ui->tableWidget_consume->blockSignals(true);
+			CalculationHelper::calculateAndUpdateConsumeTable(ui->tableWidget_consume, ui->tableWidget_items, columnCarryover, columnDeposits, columnTurnover, columnDebt, columnCredit, columnItemsStart, columnItemsEnd);
+			ui->tableWidget_consume->blockSignals(false);
+		}
+		else
+		{
+			spdlog::info("Restoring row with index: " + std::to_string(changedItem->row()) + " from table widget: " + tableWidget->objectName().toStdString());
+			std::vector<QString*> rowToRestore = tableWidgetItemsCopy.at(changedItem->row());
+
+			tableWidget->blockSignals(true);
+			for (int column = 0; column < tableWidget->columnCount(); column++)
+			{
+				if (column == changedItem->column())
+				{
+					changedItem->text() = QString::fromStdString(rowToRestore.at(column)->toStdString());
+				}
+				TableWidgetHelper::addItemToTableWidget(tableWidget, rowToRestore.at(column)->toStdString(), changedItem->row(), column);
+			}
+			tableWidget->blockSignals(false);
+		}
+
+		TableWidgetHelper::writeTableWidgetToCSVfile(ConfigHandler::GetInstance()->GetAppConfig()->consumationCSVPath, ui->tableWidget_consume);
 	}
 
-	TableWidgetHelper::writeTableWidgetToCSVfile(ConfigHandler::GetInstance()->GetAppConfig()->itemCSVPath, tableWidget);
+	TableWidgetHelper::generateConsumeTableHeader(ui->tableWidget_consume, ui->tableWidget_member, ui->tableWidget_items);
+
+	TableWidgetHelper::writeTableWidgetToCSVfile(ConfigHandler::GetInstance()->GetAppConfig()->itemCSVPath, ui->tableWidget_items);
 }
 
 void MainWindow::onItemTableWidgetMemberChanged(QTableWidgetItem* changedItem)
@@ -377,12 +438,13 @@ void MainWindow::onItemTableWidgetMemberChanged(QTableWidgetItem* changedItem)
 	{
 		spdlog::info("Member will be deleted, because name and alias is empty.");
 
-		deleteEmptyMemberFromTable(tableWidget);
+		TableWidgetHelper::deleteEmptyMemberOfTableWidget(this, tableWidget, ui->tableWidget_consume, ui->tableWidget_member);
 	}
 
-	updateMemberInMemberAndConsumeTable(changedItem);
-	TableWidgetHelper::writeTableWidgetToCSVfile(ConfigHandler::GetInstance()->GetAppConfig()->memberCSVPath, tableWidget);
-	TableWidgetHelper::writeTableWidgetToCSVfile(ConfigHandler::GetInstance()->GetAppConfig()->consumationCSVPath, tableWidget);
+	TableWidgetHelper::updateMemberInMemberAndConsumeTable(changedItem, ui->tableWidget_consume, ui->tableWidget_member);
+	TableWidgetHelper::updateConsumeTableVerticalHeader(ui->tableWidget_consume, ui->tableWidget_consume->horizontalScrollBar()->value());
+	TableWidgetHelper::writeTableWidgetToCSVfile(ConfigHandler::GetInstance()->GetAppConfig()->memberCSVPath, ui->tableWidget_member);
+	TableWidgetHelper::writeTableWidgetToCSVfile(ConfigHandler::GetInstance()->GetAppConfig()->consumationCSVPath, ui->tableWidget_consume);
 }
 
 void MainWindow::onItemTableWidgetConsumeChanged(QTableWidgetItem* changedItem)
@@ -421,9 +483,10 @@ void MainWindow::onItemTableWidgetConsumeChanged(QTableWidgetItem* changedItem)
 		{
 			spdlog::info("Member will be deleted, because name and alias is empty.");
 
-			deleteEmptyMemberFromTable(tableWidget);
+			TableWidgetHelper::deleteEmptyMemberOfTableWidget(this, tableWidget, ui->tableWidget_consume, ui->tableWidget_member);
 		}
-		updateMemberInMemberAndConsumeTable(changedItem);
+		TableWidgetHelper::updateMemberInMemberAndConsumeTable(changedItem, ui->tableWidget_consume, ui->tableWidget_member);
+		TableWidgetHelper::updateConsumeTableVerticalHeader(ui->tableWidget_consume, ui->tableWidget_consume->horizontalScrollBar()->value());
 	}
 	else
 	{
@@ -480,8 +543,8 @@ void MainWindow::onItemTableWidgetConsumeChanged(QTableWidgetItem* changedItem)
 		}
 	}
 
-	TableWidgetHelper::writeTableWidgetToCSVfile(ConfigHandler::GetInstance()->GetAppConfig()->memberCSVPath, tableWidget);
-	TableWidgetHelper::writeTableWidgetToCSVfile(ConfigHandler::GetInstance()->GetAppConfig()->consumationCSVPath, tableWidget);
+	TableWidgetHelper::writeTableWidgetToCSVfile(ConfigHandler::GetInstance()->GetAppConfig()->memberCSVPath, ui->tableWidget_member);
+	TableWidgetHelper::writeTableWidgetToCSVfile(ConfigHandler::GetInstance()->GetAppConfig()->consumationCSVPath, ui->tableWidget_consume);
 }
 
 void MainWindow::onItemTableWidgetConsumeDoubleClicked(QTableWidgetItem* item)
@@ -513,6 +576,20 @@ void MainWindow::onTableWidgetItemsRowDeleted()
 
 }
 
+void MainWindow::onTableWidgetConsumeHorizontalScroll()
+{	
+	QObject* obj = sender();
+	QScrollBar* scrollBar = qobject_cast<QScrollBar*>(obj);
+
+	QTableWidget* tableWidget = qobject_cast<QTableWidget*>(scrollBar->parent()->parent());
+
+	spdlog::info("Horizontal scroll in table widget: " + tableWidget->objectName().toStdString()+". Scroll value: "+std::to_string(scrollBar->value()));
+
+	TableWidgetHelper::updateConsumeTableVerticalHeader(tableWidget, scrollBar->value());
+
+	spdlog::info("Horizontal scroll finished");
+}
+
 void MainWindow::shortcutCtrlF()
 {
 	spdlog::info("Shortcut STRG + F pressed.");
@@ -532,6 +609,7 @@ void MainWindow::shortcutCtrlF()
 			columnToFocus == alias->column();
 		}
 
+		ui->tableWidget_consume->scrollToItem(alias);
 		ui->tableWidget_consume->setCurrentCell(alias->row(), columnToFocus);
 
 		spdlog::info("Set focus to cell in row: " + std::to_string(alias->row()) + " and column: " + std::to_string(columnToFocus));
@@ -542,217 +620,6 @@ void MainWindow::shortcutCtrlF()
 	}
 
 	spdlog::info("Finished STRG + F");
-}
-
-bool MainWindow::deleteEmptyMemberFromTable(QTableWidget* tableWidget)
-{
-	spdlog::info("Trying to delete empty members from table widget: " + tableWidget->objectName().toStdString());
-
-	for (int row = 0; row < tableWidget->rowCount(); row++)
-	{
-		QTableWidgetItem* memberAlias = tableWidget->item(row, 0);
-		QTableWidgetItem* memberFirstName = tableWidget->item(row, 1);
-		QTableWidgetItem* memberLastName = tableWidget->item(row, 2);
-
-		if (memberAlias->text().isEmpty() && memberFirstName->text().isEmpty() && memberLastName->text().isEmpty())
-		{
-			spdlog::info("Found a row with empty member data in table: " + tableWidget->objectName().toStdString());
-
-			double debt = 0.0;
-			double credit = 0.0;
-			if (memberHasDebtOrCredit(row, debt, credit))
-			{
-				std::string message = "Member still has " + std::to_string(debt) + " Euro debt and " + std::to_string(credit) + " Euro credit.";
-				spdlog::warn(message);
-
-				message = "Mitglied hat noch " + std::to_string(debt) + " Euro Schulden und " + std::to_string(credit) + " Euro Guthaben. \n Willst du das Mitglied wirklich loeschen?";
-
-				auto reply = QMessageBox::question(this, QString::fromStdString("Warnung"), QString::fromStdString(message), QMessageBox::Ok | QMessageBox::Cancel);
-				if (reply == QMessageBox::Ok)
-				{
-					spdlog::info("User decided that row with empty member should be deleted.");
-					deleteRowFromMemberAndConsumeTable(row);
-					spdlog::info("Successfully deleted empty member from table widget: " + tableWidget->objectName().toStdString());
-					return true;
-				}
-				else
-				{
-					spdlog::info("User decided row with empty member should not be deleted.");
-					tableWidget->blockSignals(true);
-					restoreRowFromMemberOrConsumeTable(tableWidget, row);
-					tableWidget->blockSignals(false);
-					return false;
-				}
-			}
-			else
-			{
-				spdlog::info("Member can be deleted because he has no credit or debt.");
-				deleteRowFromMemberAndConsumeTable(row);
-				spdlog::info("Successfully deleted empty member from table widget: " + tableWidget->objectName().toStdString());
-			}
-		}
-	}
-}
-
-bool MainWindow::restoreRowFromMemberOrConsumeTable(QTableWidget* tableWidgetToRestore, int rowToRestore)
-{
-	spdlog::info("Trying to restore row: " + std::to_string(rowToRestore) + " of table widget: " + tableWidgetToRestore->objectName().toStdString());
-
-	if (tableWidgetToRestore->objectName() == ui->tableWidget_consume->objectName())
-	{
-		for (int i = 0; i < 3; i++)
-		{
-			if (!TableWidgetHelper::addItemToTableWidget(tableWidgetToRestore, ui->tableWidget_member->item(rowToRestore, i), rowToRestore, i, true))
-			{
-				return false;
-			}
-		}
-	}
-	else if (tableWidgetToRestore->objectName() == ui->tableWidget_member->objectName())
-	{
-		for (int i = 0; i < 3; i++)
-		{
-			if (!TableWidgetHelper::addItemToTableWidget(tableWidgetToRestore, ui->tableWidget_consume->item(rowToRestore, i), rowToRestore, i, true))
-			{
-				return false;
-			}
-		}
-	}
-	else
-	{
-		spdlog::warn("Unknown table widget: " + tableWidgetToRestore->objectName().toStdString());
-		return false;
-	}
-
-	spdlog::info("Successfully restored row: " + std::to_string(rowToRestore) + " of table widget: " + tableWidgetToRestore->objectName().toStdString());
-	return true;
-}
-
-bool MainWindow::deleteRowFromMemberAndConsumeTable(int row)
-{
-	spdlog::info("Trying to remove row: " + std::to_string(row) + " from consume table and member table");
-
-	QTableWidget* consumeTable = ui->tableWidget_consume;
-	QTableWidget* memberTable = ui->tableWidget_member;
-
-	consumeTable->blockSignals(true);
-	memberTable->blockSignals(true);
-
-	consumeTable->removeRow(row);
-	memberTable->removeRow(row);
-
-	consumeTable->blockSignals(false);
-	memberTable->blockSignals(false);
-
-	spdlog::info("Successfully removed row: " + std::to_string(row) + " from consume and member table");
-	return true;
-}
-
-bool MainWindow::updateMemberInMemberAndConsumeTable(QTableWidgetItem* changedItem)
-{
-	spdlog::info("Trying to update member in member and consume table");
-
-	if (changedItem != nullptr && changedItem->tableWidget() == ui->tableWidget_consume)
-	{
-		if (!changedItem->text().isEmpty())
-		{
-			QTableWidgetItem* itemInMemberTable = ui->tableWidget_member->item(changedItem->row(), changedItem->column());
-			if (itemInMemberTable != nullptr && changedItem->text() == itemInMemberTable->text())
-			{
-				spdlog::info("Not inserting item from consume table into member table because the text is the same");
-				return true;
-			}
-
-			spdlog::info("Trying to insert item from consume table into member table.");
-
-			TableWidgetHelper::addItemToTableWidget(ui->tableWidget_member, changedItem->text(), changedItem->row(), changedItem->column());
-		}
-		else
-		{
-			spdlog::info("Not inserting item from consume table into member table because the text is empty");
-		}
-	}
-	else if (changedItem != nullptr && changedItem->tableWidget() == ui->tableWidget_member)
-	{
-		if (!changedItem->text().isEmpty())
-		{
-			QTableWidgetItem* itemInConsumeTable = ui->tableWidget_consume->item(changedItem->row(), changedItem->column());
-			if (itemInConsumeTable != nullptr && changedItem->text() == itemInConsumeTable->text())
-			{
-				spdlog::info("Not inserting item from member table into consume table because the text is the same");
-				return true;
-			}
-
-			spdlog::info("Trying to insert item from member table into consume table.");
-			TableWidgetHelper::addItemToTableWidget(ui->tableWidget_consume, changedItem->text(), changedItem->row(), changedItem->column());
-		}
-		else
-		{
-			spdlog::info("Not inserting item from member table into consume table because the text is empty");
-		}
-	}
-	else
-	{
-		spdlog::warn("Changed item was null or table widget was not recognized");
-		return false;
-	}
-
-	return true;
-}
-
-bool MainWindow::memberHasDebtOrCredit(int rowInConsumeTable, double& outDebt, double& outCredit)
-{
-	spdlog::info("Trying to find out if member has debt or credit");
-
-	QTableWidget* tableWidget = ui->tableWidget_consume;
-
-	int columnDebt = TableWidgetHelper::findColumnInTableHeader(tableWidget, QString::fromStdString("Schulden"));
-	int columnCredit = TableWidgetHelper::findColumnInTableHeader(tableWidget, QString::fromStdString("Guthaben"));
-
-	if (columnDebt != -1 && columnCredit != 1)
-	{
-		QTableWidgetItem* debtItem = tableWidget->item(rowInConsumeTable, columnDebt);
-		QTableWidgetItem* creditItem = tableWidget->item(rowInConsumeTable, columnCredit);
-
-		if (debtItem != nullptr)
-		{
-			outDebt = debtItem->text().toDouble();
-		}
-		else
-		{
-			outDebt = 0.0;
-		}
-
-		if (creditItem != nullptr)
-		{
-			outCredit = creditItem->text().toDouble();
-		}
-		else
-		{
-			outCredit = 0.0;
-		}
-
-		spdlog::info("Member has " + std::to_string(outDebt) + " debt and " + std::to_string(outCredit) + " credit.");
-		if (outDebt == 0.0 && outCredit == 0.0)
-		{
-			spdlog::info("Member has no debt or credit.");
-			return false;
-		}
-		else
-		{
-			spdlog::info("Member has debt or credit.");
-			return true;
-		}
-	}
-	else
-	{
-		std::string message = "Could not find column for debt or credit in table widget: " + tableWidget->objectName().toStdString();
-		spdlog::error(message);
-		throw std::exception(message.c_str());
-	}
-
-	return true;
-
 }
 
 bool MainWindow::fillItemList()
@@ -836,5 +703,20 @@ bool MainWindow::fillConsumationList()
 	spdlog::info("Successfully filled consumation list");
 
 	return true;
+}
+
+void MainWindow::saveCopyOfTablewidgetItems()
+{
+	QTableWidget* tableWidget = ui->tableWidget_items;
+
+	for (int row = 0; row < tableWidget->rowCount(); row++)
+	{
+		std::vector<QString*> rowList;
+		for (int column = 0; column < tableWidget->columnCount(); column++)
+		{
+			rowList.push_back(new QString(tableWidget->item(row, column)->text()));
+		}
+		tableWidgetItemsCopy.push_back(rowList);
+	}
 }
 

@@ -136,17 +136,17 @@ void ConfigHandler::Init()
 	checkOk = checkOk && FileHelper::checkFile(mConfig->itemCSVPath);
 
 	checkOk = checkOk && FileHelper::checkDir(mConfig->saveFileDir);
-	checkOk = checkOk && FileHelper::checkFile(mConfig->saveFilePath);
+	//checkOk = checkOk && FileHelper::checkFile(mConfig->saveFilePath);
 
 	checkOk = checkOk && FileHelper::checkDir(mConfig->logFileDir);
 
 	checkOk = checkOk && FileHelper::checkDir(mConfig->pdfFileDir);
-	checkOk = checkOk && FileHelper::checkFile(mConfig->pdfFilePath);
+	//checkOk = checkOk && FileHelper::checkFile(mConfig->pdfFilePath);
 
-	checkOk = checkOk && FileHelper::checkFile(mConfig->statisticsPath);
+	//checkOk = checkOk && FileHelper::checkFile(mConfig->statisticsPath);
 
 	checkOk = checkOk && FileHelper::checkDir(mConfig->debugDir);
-	checkOk = checkOk && FileHelper::checkFile(mConfig->statisticsDebugPath);
+	//checkOk = checkOk && FileHelper::checkFile(mConfig->statisticsDebugPath);
 
 	if (checkOk)
 		spdlog::info("All dirs and files are ok.");
@@ -155,6 +155,16 @@ void ConfigHandler::Init()
 		std::string message = "Check on dirs and/or files failed!";
 		spdlog::error(message);
 		throw std::exception(message.c_str());
+	}
+
+	std::string computername = std::getenv("COMPUTERNAME");
+	if (computername == "DESKTOP-AIDB4T7")
+	{
+		mConfig->isDebugComputer = true;
+	}
+	else
+	{
+		mConfig->isDebugComputer = false;
 	}
 
 }
@@ -170,28 +180,33 @@ void ConfigHandler::ReadConfigFile()
 
 	try
 	{
-		/*mConfig->consumationCSVPath = jsonConfig["ConsumationCsvPath"].get<std::string>();
+		mConfig->consumationCSVPath = jsonConfig["ConsumationCsvPath"].get<std::string>();
 		mConfig->memberCSVPath = jsonConfig["MemberCsvPath"].get<std::string>();
 		mConfig->itemCSVPath = jsonConfig["ItemCsvPath"].get<std::string>();
 
 		mConfig->saveFileDir = jsonConfig["SaveFileDir"].get<std::string>();
-		mConfig->saveFilePath = jsonConfig["SaveFilePath"].get<std::string>();
+		mConfig->saveFilePath = mConfig->saveFileDir + "/Artikel_SicherungsKopie.csv";
+		//mConfig->saveFilePath = jsonConfig["SaveFilePath"].get<std::string>();
 
 		mConfig->logFileDir = jsonConfig["LogFileDir"].get<std::string>();
 
 		mConfig->pdfFileDir = jsonConfig["PdfFileDir"].get<std::string>();
-		mConfig->pdfFilePath = jsonConfig["PdfFilePath"].get<std::string>();
+		mConfig->pdfFilePath = mConfig->pdfFileDir + "/Abrechnung-" + GetCurrentDateStr() + ".pdf";
+		//mConfig->pdfFilePath = jsonConfig["PdfFilePath"].get<std::string>();
 
-		mConfig->statisticsPath = jsonConfig["StatisticsPath"].get<std::string>();
+		//mConfig->statisticsPath = jsonConfig["StatisticsPath"].get<std::string>();
+		mConfig->statisticsPath = mConfig->pdfFileDir + "/Statistik-Abrechnung-" + GetCurrentDateStr() + ".txt";
 
 		mConfig->debugDir = jsonConfig["DebugDir"].get<std::string>();
-		mConfig->statisticsDebugPath = jsonConfig["DebugStatisticsPath"].get<std::string>();*/
+		mConfig->statisticsDebugPath = mConfig->debugDir + "/DebugStatistics.json";
+		//mConfig->statisticsDebugPath = jsonConfig["DebugStatisticsPath"].get<std::string>();
 
 		mConfig->debtThreshhold = jsonConfig["DebtThreshhold"].get<double>();
 	}
 	catch (const std::exception& ex)
 	{
 		spdlog::error("Could not read config file: " + mConfig->configFile + "! Exception: " + ex.what());
+		WriteConfigFile();
 	}
 
 	spdlog::info("Finished reading config file: " + mConfig->configFile);
@@ -202,22 +217,22 @@ void ConfigHandler::WriteConfigFile()
 	spdlog::info("Trying to write config to file: " + mConfig->configFile);
 	nlohmann::json jsonConfig;
 
-	/*jsonConfig["ConsumationCsvPath"] = mConfig->consumationCSVPath;
+	jsonConfig["ConsumationCsvPath"] = mConfig->consumationCSVPath;
 	jsonConfig["MemberCsvPath"] = mConfig->memberCSVPath;
 	jsonConfig["ItemCsvPath"] = mConfig->itemCSVPath;
 
 	jsonConfig["SaveFileDir"] = mConfig->saveFileDir;
-	jsonConfig["SaveFilePath"] = mConfig->saveFilePath;
+	//jsonConfig["SaveFilePath"] = mConfig->saveFilePath;
 	
 	jsonConfig["LogFileDir"] = mConfig->logFileDir;
 
 	jsonConfig["PdfFileDir"] = mConfig->pdfFileDir;
-	jsonConfig["PdfFilePath"] = mConfig->pdfFilePath;
+	//jsonConfig["PdfFilePath"] = mConfig->pdfFilePath;
 
-	jsonConfig["StatisticsPath"] = mConfig->statisticsPath;
+	//jsonConfig["StatisticsPath"] = mConfig->statisticsPath;
 
 	jsonConfig["DebugDir"] = mConfig->debugDir;
-	jsonConfig["DebugStatisticsPath"] = mConfig->statisticsDebugPath;*/
+	//jsonConfig["DebugStatisticsPath"] = mConfig->statisticsDebugPath;
 
 	jsonConfig["DebtThreshhold"] = mConfig->debtThreshhold;
 

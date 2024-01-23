@@ -11,7 +11,11 @@ public:
 	static bool addRowToTableWidget(QTableWidget* tableWidget, CSVRow csvRow, std::vector<std::string> stringRow);
 
 	static bool deleteEmptyRowsOfTableWidget(QTableWidget* tableWidget);
-	static bool deleteEmptyColumnOfTableWidget(QTableWidget* tableWidget);
+	static bool deleteEmptyColumnOfTableWidget(QWidget* parent, QTableWidget* tableWidget);
+	static bool deleteEmptyMemberOfTableWidget(QWidget* parent, QTableWidget* tableWidget, QTableWidget* consumeTableWidget, QTableWidget* memberTableWidget);
+	static bool deleteRowOfTableWidget(QTableWidget* tableWidget, int row, bool blockSignals = false);
+
+	static bool restoreRowFromMemberOrConsumeTable(QTableWidget* tableWidgetToRestore, QTableWidget* consumeTableWidget, QTableWidget* memberTableWidget, int rowToRestore);
 
 	static bool addItemToTableWidget(QTableWidget* tableWidget, std::string itemText, int row, int column);
 	static bool addItemToTableWidget(QTableWidget* tableWidget, QTableWidgetItem* item, int row, int column);
@@ -31,5 +35,13 @@ public:
 
 	static bool clearColumnOfTable(QTableWidget* tableWidget, int column);
 	static bool copyColumnOfTable(QTableWidget* tableWidget, int columnFrom, int columnTo);
+
+	static bool memberHasDebtOrCredit(QTableWidget* consumeTableWidget, int rowInConsumeTable, double& outDebt, double& outCredit);
+
+	static bool updateMemberInMemberAndConsumeTable(QTableWidgetItem* changedItem, QTableWidget* consumeTableWidget, QTableWidget* memberTableWidget);
+
+	static bool updateConsumeTableVerticalHeader(QTableWidget* consumeTableWidget, int scrollValue);
+
+	static bool checkColumnIsEmpty(QTableWidget* tableWidget, int column, QWidget* parent);
 };
 

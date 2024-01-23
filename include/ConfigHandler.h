@@ -21,6 +21,8 @@ struct AppConfig
 	double debtThreshhold;
 
 	int itemsInConsumeTableIndex;
+
+	bool isDebugComputer;
 };
 
 class ConfigHandler

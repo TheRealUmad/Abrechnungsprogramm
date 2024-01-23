@@ -29,11 +29,8 @@ public:
 	bool fillItemList();
 	bool fillMemberList();
 	bool fillConsumationList();
-	bool memberHasDebtOrCredit(int rowInConsumeTable, double& outDebt, double& outCredit);
-	bool deleteEmptyMemberFromTable(QTableWidget* tableWidget);
-	bool deleteRowFromMemberAndConsumeTable(int row);
-	bool restoreRowFromMemberOrConsumeTable(QTableWidget* tableWidgetToRestore, int rowToRestore);
-	bool updateMemberInMemberAndConsumeTable(QTableWidgetItem* changedItem);
+
+	void saveCopyOfTablewidgetItems();
 
 public slots:
 	void onButtonAddItemClick();
@@ -46,12 +43,15 @@ public slots:
 	void onItemTableWidgetConsumeDoubleClicked(QTableWidgetItem*);
 	void onTableWidgetItemsRowInserted();
 	void onTableWidgetItemsRowDeleted();
+	void onTableWidgetConsumeHorizontalScroll();
 
 	void shortcutCtrlF();
 private:
 	Ui::MainWindow* ui;
 
 	QShortcut* keyCtrlF;
+
+	std::vector<std::vector<QString*>> tableWidgetItemsCopy;
 };
 
 #endif // MAINWINDOW_H

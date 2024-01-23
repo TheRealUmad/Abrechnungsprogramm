@@ -1,0 +1,7 @@
+Suchen Button hinzufügen
+.csv Dateien sollen gesperrt werden.
+.csv Dateien sollen durch eine Datenbank ersetzt werden.
+Überprüfen was passiert, wenn Konsumationen von einem Artikel eingegeben wurden und dieser dann gelöscht wird. 
+Threshhold für Großschuldner soll auch in der UI angepasst werden können.
+Konsolenfenster soll nur mehr bei mir geöffnet werden
+Icon soll auch im Fenster sichtbar sein

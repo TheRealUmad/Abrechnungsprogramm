@@ -4,6 +4,7 @@
 #include <FileHelper.h>
 #include <ConfigHandler.h>
 #include <StringHelper.h>
+#include <QMessageBox>
 
 bool TableWidgetHelper::addRowToTableWidget(QTableWidget* tableWidget, std::vector<std::string> row)
 {
@@ -121,9 +122,9 @@ bool TableWidgetHelper::deleteEmptyRowsOfTableWidget(QTableWidget* tableWidget)
 	return true;
 }
 
-bool TableWidgetHelper::deleteEmptyColumnOfTableWidget(QTableWidget* tableWidget)
+bool TableWidgetHelper::deleteEmptyColumnOfTableWidget(QWidget* parent, QTableWidget* tableWidget)
 {
-	spdlog::info("Trying to remove empty rows of table widget: " + tableWidget->objectName().toStdString());
+	spdlog::info("Trying to remove empty column of table widget: " + tableWidget->objectName().toStdString());
 	try
 	{
 		for (int column = 0; column < tableWidget->columnCount(); column++)
@@ -131,8 +132,15 @@ bool TableWidgetHelper::deleteEmptyColumnOfTableWidget(QTableWidget* tableWidget
 			QTableWidgetItem* item = tableWidget->horizontalHeaderItem(column);
 			if (item == nullptr || item->text().isEmpty())
 			{
-				spdlog::info("Removing empty column with index: " + std::to_string(column) + " from table widget: " + tableWidget->objectName().toStdString());
-				tableWidget->removeColumn(column);
+				if (checkColumnIsEmpty(tableWidget, column, parent))
+				{
+					spdlog::info("Removing empty column with index: " + std::to_string(column) + " from table widget: " + tableWidget->objectName().toStdString());
+					tableWidget->removeColumn(column);
+				}
+				else
+				{
+					return false;
+				}
 			}
 		}
 	}
@@ -143,6 +151,114 @@ bool TableWidgetHelper::deleteEmptyColumnOfTableWidget(QTableWidget* tableWidget
 		throw std::exception(message.c_str());
 	}
 
+	return true;
+}
+
+bool TableWidgetHelper::deleteEmptyMemberOfTableWidget(QWidget* parent, QTableWidget* tableWidget,  QTableWidget* consumeTableWidget, QTableWidget* memberTableWidget)
+{
+	spdlog::info("Trying to delete empty members from table widget: " + tableWidget->objectName().toStdString());
+
+	for (int row = 0; row < tableWidget->rowCount(); row++)
+	{
+		QTableWidgetItem* memberAlias = tableWidget->item(row, 0);
+		QTableWidgetItem* memberFirstName = tableWidget->item(row, 1);
+		QTableWidgetItem* memberLastName = tableWidget->item(row, 2);
+
+		if (memberAlias->text().isEmpty() && memberFirstName->text().isEmpty() && memberLastName->text().isEmpty())
+		{
+			spdlog::info("Found a row with empty member data in table: " + tableWidget->objectName().toStdString());
+
+			double debt = 0.0;
+			double credit = 0.0;
+			if (memberHasDebtOrCredit(consumeTableWidget, row, debt, credit))
+			{
+				std::string message = "Member still has " + std::to_string(debt) + " Euro debt and " + std::to_string(credit) + " Euro credit.";
+				spdlog::warn(message);
+
+				message = "Mitglied hat noch ";
+
+				if (debt != 0.0)
+					message += std::to_string(debt) + " Euro Schulden. ";
+				else if (credit != 0.0)
+					message += std::to_string(credit) + " Euro Guthaben. ";
+
+				message += "\n Willst du das Mitglied wirklich loeschen?";
+
+				auto reply = QMessageBox::question(parent, QString::fromStdString("Warnung"), QString::fromStdString(message), QMessageBox::Ok | QMessageBox::Cancel);
+				if (reply == QMessageBox::Ok)
+				{
+					spdlog::info("User decided that row with empty member should be deleted.");
+					deleteRowOfTableWidget(consumeTableWidget, row, true);
+					deleteRowOfTableWidget(memberTableWidget, row, true);
+					spdlog::info("Successfully deleted empty member from table widget: " + tableWidget->objectName().toStdString());
+					return true;
+				}
+				else
+				{
+					spdlog::info("User decided row with empty member should not be deleted.");
+					tableWidget->blockSignals(true);
+					restoreRowFromMemberOrConsumeTable(tableWidget, consumeTableWidget, memberTableWidget, row);
+					tableWidget->blockSignals(false);
+					return false;
+				}
+			}
+			else
+			{
+				spdlog::info("Member can be deleted because he has no credit or debt.");
+				deleteRowOfTableWidget(consumeTableWidget, row, true);
+				deleteRowOfTableWidget(memberTableWidget, row, true);
+				spdlog::info("Successfully deleted empty member from table widget: " + tableWidget->objectName().toStdString());
+			}
+		}
+	}
+}
+
+bool TableWidgetHelper::deleteRowOfTableWidget(QTableWidget* tableWidget, int row, bool blockSignals)
+{
+	spdlog::info("Trying to remove row: " + std::to_string(row) + " from table widget: " + tableWidget->objectName().toStdString());
+
+	if (blockSignals)
+		tableWidget->blockSignals(true);
+
+	tableWidget->removeRow(row);
+
+	if (blockSignals)
+		tableWidget->blockSignals(false);
+
+	return true;
+}
+
+bool TableWidgetHelper::restoreRowFromMemberOrConsumeTable(QTableWidget* tableWidgetToRestore, QTableWidget* consumeTableWidget, QTableWidget* memberTableWidget, int rowToRestore)
+{
+	spdlog::info("Trying to restore row: " + std::to_string(rowToRestore) + " of table widget: " + tableWidgetToRestore->objectName().toStdString());
+
+	if (tableWidgetToRestore->objectName() == consumeTableWidget->objectName())
+	{
+		for (int i = 0; i < 3; i++)
+		{
+			if (!TableWidgetHelper::addItemToTableWidget(tableWidgetToRestore, memberTableWidget->item(rowToRestore, i), rowToRestore, i, true))
+			{
+				return false;
+			}
+		}
+	}
+	else if (tableWidgetToRestore->objectName() == memberTableWidget->objectName())
+	{
+		for (int i = 0; i < 3; i++)
+		{
+			if (!TableWidgetHelper::addItemToTableWidget(tableWidgetToRestore, consumeTableWidget->item(rowToRestore, i), rowToRestore, i, true))
+			{
+				return false;
+			}
+		}
+	}
+	else
+	{
+		spdlog::warn("Unknown table widget: " + tableWidgetToRestore->objectName().toStdString());
+		return false;
+	}
+
+	spdlog::info("Successfully restored row: " + std::to_string(rowToRestore) + " of table widget: " + tableWidgetToRestore->objectName().toStdString());
 	return true;
 }
 
@@ -339,7 +455,7 @@ bool TableWidgetHelper::findMemberByNameAndAlias(QTableWidget* tableWidget, QStr
 
 	int matches = 0;
 
-	for (int row = 0; row < tableWidget->rowCount()-1; row++)
+	for (int row = 0; row < tableWidget->rowCount(); row++)
 	{
 
 		QTableWidgetItem* aliasToCompare = tableWidget->item(row, 0);
@@ -666,5 +782,164 @@ bool TableWidgetHelper::copyColumnOfTable(QTableWidget* tableWidget, int columnF
 	}
 
 	spdlog::info("Successfully copied column: " + std::to_string(columnFrom) + " to column: " + std::to_string(columnTo) + " in table widget: " + tableWidget->objectName().toStdString());
+	return true;
+}
+
+bool TableWidgetHelper::memberHasDebtOrCredit(QTableWidget* consumeTableWidget, int rowInConsumeTable, double& outDebt, double& outCredit)
+{
+	spdlog::info("Trying to find out if member has debt or credit");
+
+	int columnDebt = TableWidgetHelper::findColumnInTableHeader(consumeTableWidget, QString::fromStdString("Schulden"));
+	int columnCredit = TableWidgetHelper::findColumnInTableHeader(consumeTableWidget, QString::fromStdString("Guthaben"));
+
+	if (columnDebt != -1 && columnCredit != 1)
+	{
+		QTableWidgetItem* debtItem = consumeTableWidget->item(rowInConsumeTable, columnDebt);
+		QTableWidgetItem* creditItem = consumeTableWidget->item(rowInConsumeTable, columnCredit);
+
+		if (debtItem != nullptr)
+		{
+			outDebt = debtItem->text().toDouble();
+		}
+		else
+		{
+			outDebt = 0.0;
+		}
+
+		if (creditItem != nullptr)
+		{
+			outCredit = creditItem->text().toDouble();
+		}
+		else
+		{
+			outCredit = 0.0;
+		}
+
+		spdlog::info("Member has " + std::to_string(outDebt) + " debt and " + std::to_string(outCredit) + " credit.");
+		if (outDebt == 0.0 && outCredit == 0.0)
+		{
+			spdlog::info("Member has no debt or credit.");
+			return false;
+		}
+		else
+		{
+			spdlog::info("Member has debt or credit.");
+			return true;
+		}
+	}
+	else
+	{
+		std::string message = "Could not find column for debt or credit in table widget: " + consumeTableWidget->objectName().toStdString();
+		spdlog::error(message);
+		throw std::exception(message.c_str());
+	}
+
+	return true;
+}
+
+bool TableWidgetHelper::updateMemberInMemberAndConsumeTable(QTableWidgetItem* changedItem, QTableWidget* consumeTableWidget, QTableWidget* memberTableWidget)
+{
+	spdlog::info("Trying to update member in member and consume table");
+
+	if (changedItem != nullptr && changedItem->tableWidget() == consumeTableWidget)
+	{
+		if (!changedItem->text().isEmpty())
+		{
+			QTableWidgetItem* itemInMemberTable = memberTableWidget->item(changedItem->row(), changedItem->column());
+			if (itemInMemberTable != nullptr && changedItem->text() == itemInMemberTable->text())
+			{
+				spdlog::info("Not inserting item from consume table into member table because the text is the same");
+				return true;
+			}
+
+			spdlog::info("Trying to insert item from consume table into member table.");
+
+			addItemToTableWidget(memberTableWidget, changedItem->text(), changedItem->row(), changedItem->column());
+		}
+		else
+		{
+			spdlog::info("Not inserting item from consume table into member table because the text is empty");
+		}
+	}
+	else if (changedItem != nullptr && changedItem->tableWidget() == memberTableWidget)
+	{
+		if (!changedItem->text().isEmpty())
+		{
+			QTableWidgetItem* itemInConsumeTable = consumeTableWidget->item(changedItem->row(), changedItem->column());
+			if (itemInConsumeTable != nullptr && changedItem->text() == itemInConsumeTable->text())
+			{
+				spdlog::info("Not inserting item from member table into consume table because the text is the same");
+				return true;
+			}
+
+			spdlog::info("Trying to insert item from member table into consume table.");
+		    addItemToTableWidget(consumeTableWidget, changedItem->text(), changedItem->row(), changedItem->column());
+		}
+		else
+		{
+			spdlog::info("Not inserting item from member table into consume table because the text is empty");
+		}
+	}
+	else
+	{
+		spdlog::warn("Changed item was null or table widget was not recognized");
+		return false;
+	}
+
+	return true;
+}
+
+bool TableWidgetHelper::updateConsumeTableVerticalHeader(QTableWidget* consumeTableWidget, int scrollValue)
+{
+	spdlog::info("Trying to update consume table vertical header");
+
+	if (scrollValue != 0)
+	{
+		for (int row = 0; row < consumeTableWidget->rowCount(); row++)
+		{
+			consumeTableWidget->setVerticalHeaderItem(row, new QTableWidgetItem(*consumeTableWidget->item(row, 0)));
+		}
+	}
+	else
+	{
+		for (int row = 0; row < consumeTableWidget->rowCount(); row++)
+		{
+			consumeTableWidget->setVerticalHeaderItem(row, new QTableWidgetItem(QString::fromStdString(std::to_string(row + 1))));
+		}
+	}
+	return true;
+}
+
+bool TableWidgetHelper::checkColumnIsEmpty(QTableWidget* tableWidget, int column, QWidget* parent)
+{
+	spdlog::info("Trying to check if column: " + std::to_string(column) + " in table widget: " + tableWidget->objectName().toStdString() + " is empty.");
+
+	for (int row = 0; row < tableWidget->rowCount(); row++)
+	{
+		QTableWidgetItem* item = tableWidget->item(row, column);
+		if (item == nullptr || item->text().isEmpty())
+		{
+			continue;
+		}
+		else
+		{
+			spdlog::warn("Column is not empty!");
+
+			std::string message = "Die Spalte: " + std::to_string(column) + " in der Tabelle: "+tableWidget->objectName().toStdString()+" ist nicht leer, soll sie trotzdem gelöscht werden?";
+			auto reply = QMessageBox::question(parent, QString::fromStdString("Warnung"), QString::fromStdString(message), QMessageBox::Ok | QMessageBox::Cancel);
+			if (reply == QMessageBox::Ok)
+			{
+				spdlog::info("User decided that column should be deleted.");
+				return true;
+			}
+			else
+			{
+				spdlog::info("User decided that column should not be deleted.");
+				return false;
+			}
+		}
+	}
+
+	spdlog::info("Column is empty.");
 	return true;
 }

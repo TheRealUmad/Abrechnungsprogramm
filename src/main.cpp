@@ -4,6 +4,7 @@
 
 int main(int argc, char* argv[])
 {
+	::ShowWindow(::GetConsoleWindow(), SW_HIDE);
 	spdlog::info("Application started.");
 
 	QApplication app(argc, argv);
